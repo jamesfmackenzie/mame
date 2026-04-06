@@ -1,16 +1,9 @@
 name: Release Build
 
 on:
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Release tag (e.g. v0.251-namco-c139-jb-1)'
-        required: true
-        default: 'v0.251-namco-c139-jb-1'
-      prerelease:
-        description: 'Mark as pre-release'
-        type: boolean
-        default: true
+  push:
+    tags:
+      - 'v*-namco-c139-jb*'
 
 permissions:
   contents: write
@@ -83,9 +76,9 @@ jobs:
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: ${{ github.event.inputs.tag }}
-        name: ${{ github.event.inputs.tag }}
-        prerelease: ${{ github.event.inputs.prerelease }}
+        tag_name: ${{ github.ref_name }}
+        name: ${{ github.ref_name }}
+        prerelease: true
         body: |
           MAME build from the `namco-c139-jb` branch — adds Ridge Racer Full Scale
           linked-play support (Namco C139 serial board emulation).
