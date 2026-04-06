@@ -6053,10 +6053,12 @@ namespace sol {
 		/// \group emplace
 		template <class... Args>
 		T& emplace(Args&&... args) noexcept {
-			static_assert(std::is_constructible<T, Args&&...>::value, "T must be constructible with Args");
+			static_assert(sizeof...(Args) == 1, "optional<T&>::emplace requires a single argument");
+			auto&& value = std::get<0>(std::forward_as_tuple(std::forward<Args>(args)...));
+			static_assert(std::is_lvalue_reference<decltype(value)>::value, "optional<T&>::emplace requires an lvalue");
 
-			*this = nullopt;
-			this->construct(std::forward<Args>(args)...);
+			m_value = std::addressof(value);
+			return *m_value;
 		}
 
 		/// Swaps this optional with the other.
