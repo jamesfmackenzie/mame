@@ -118,6 +118,11 @@ function maintargetosdoptions(_target,_subtarget)
 	configuration { }
 
 	if _OPTIONS["targetos"]=="macosx" then
+		if _OPTIONS["with-bundled-sdl2"]==nil and _OPTIONS["USE_LIBSDL"]~="1" then
+			linkoptions {
+				"-Wl,-rpath," .. _OPTIONS["SDL_FRAMEWORK_PATH"],
+			}
+		end
 		if _OPTIONS["with-bundled-sdl2"]~=nil then
 			links {
 				"SDL2",
@@ -288,6 +293,7 @@ if BASE_TARGETOS=="unix" then
 			if _OPTIONS["USE_LIBSDL"]~="1" then
 				linkoptions {
 					"-F" .. _OPTIONS["SDL_FRAMEWORK_PATH"],
+					"-Wl,-rpath," .. _OPTIONS["SDL_FRAMEWORK_PATH"],
 				}
 				links {
 					"SDL2.framework",
@@ -501,5 +507,4 @@ project ("ocore_" .. _OPTIONS["osd"])
 			MAME_DIR .. "src/osd/modules/file/stdfile.cpp",
 		}
 	end
-
 
