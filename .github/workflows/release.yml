@@ -47,16 +47,12 @@ jobs:
           make
           mingw-w64-x86_64-gcc
           mingw-w64-x86_64-python
-          mingw-w64-x86_64-lld
-          mingw-w64-x86_64-libc++
     - uses: actions/checkout@v4
     - name: Build
       env:
         MINGW64: "/mingw64"
-        OVERRIDE_AR: "llvm-ar"
         OVERRIDE_CC: gcc
         OVERRIDE_CXX: g++
-        ARCHOPTS: "-fuse-ld=lld"
         TOOLS: 1
       run: make -j$(nproc)
     - name: Package
