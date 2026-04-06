@@ -1089,7 +1089,6 @@ Notes:
 
 #include "emu.h"
 #include "namcos22.h"
-
 #include "cpu/m68000/m68020.h"
 #include "cpu/tms32025/tms32025.h"
 #include "speaker.h"
@@ -1116,49 +1115,6 @@ Notes:
 /*********************************************************************************************/
 
 // Main CPU
-
-/* SCI, preliminary!
-
-20020000  2 R/W RX Status
-            0x01 : Frame Error
-            0x02 : Frame Received
-            0x04 : ?
-
-20020002  2 R/W Status/Control Flags
-            0x01 :
-            0x02 : RX flag? (cleared every vsync)
-            0x04 : RX flag? (cleared every vsync)
-            0x08 :
-
-20020004  2 W   FIFO Control Register
-            0x01 : sync bit enable?
-            0x02 : TX FIFO sync bit (bit-8)
-
-20020006  2 W   TX Control Register
-            0x01 : TX start/stop
-            0x02 : ?
-            0x10 : ?
-
-20020008  2 W   -
-2002000a  2 W   TX Frame Size
-2002000c  2 R/W RX FIFO Pointer (0x0000 - 0x0fff)
-2002000e  2 W   TX FIFO Pointer (0x0000 - 0x1fff)
-*/
-u16 namcos22_state::namcos22_sci_r(offs_t offset)
-{
-	switch (offset)
-	{
-		case 0x0:
-			return 0x0004;
-
-		default:
-			return 0;
-	}
-}
-
-void namcos22_state::namcos22_sci_w(offs_t offset, u16 data)
-{
-}
 
 
 // System Controller
@@ -1688,38 +1644,14 @@ void namcos22_state::namcos22_am(address_map &map)
 	 *     20010000 - 20011fff  TX Buffer
 	 *     20012000 - 20013fff  RX FIFO Buffer (also used for TX Buffer)
 	 */
-	map(0x20010000, 0x20013fff).ram();
-
+	map(0x20010000, 0x20013fff).rw(m_sci, FUNC(namco_c139_device::ram_r), FUNC(namco_c139_device::ram_w_system22));
+	
 	/**
 	 * C139 SCI Register
 	 * Mounted position: CPU 4R
-	 *
-	 *     20020000  2  R/W RX Status
-	 *         0x01 : Frame Error
-	 *         0x02 : Frame Received
-	 *         0x04 : ?
-	 *
-	 *     20020002  2  R/W Status/Control Flags
-	 *         0x01 :
-	 *         0x02 : RX flag? (cleared every vsync)
-	 *         0x04 : RX flag? (cleared every vsync)
-	 *         0x08 :
-	 *
-	 *     20020004  2  W   FIFO Control Register
-	 *         0x01 : sync bit enable?
-	 *         0x02 : TX FIFO sync bit (bit-8)
-	 *
-	 *     20020006  2  W   TX Control Register
-	 *         0x01 : TX start/stop
-	 *         0x02 : ?
-	 *         0x10 : ?
-	 *
-	 *     20020008  2  W   -
-	 *     2002000a  2  W   TX Frame Size
-	 *     2002000c  2  R/W RX FIFO Pointer (0x0000 - 0x0fff)
-	 *     2002000e  2  W   TX FIFO Pointer (0x0000 - 0x1fff)
+
 	 */
-	map(0x20020000, 0x2002000f).rw(FUNC(namcos22_state::namcos22_sci_r), FUNC(namcos22_state::namcos22_sci_w));
+	map(0x20020000, 0x2002000f).m(m_sci, FUNC(namco_c139_device::regs_map_System22));
 
 	/**
 	 * System Controller: Interrupt Control, Peripheral Control
@@ -1860,8 +1792,8 @@ void namcos22s_state::namcos22s_am(address_map &map)
 {
 	map(0x000000, 0x3fffff).rom();
 	map(0x400000, 0x40001f).rw(FUNC(namcos22s_state::namcos22_keycus_r), FUNC(namcos22s_state::namcos22_keycus_w));
-	map(0x410000, 0x413fff).ram(); // C139 SCI buffer
-	map(0x420000, 0x42000f).rw(FUNC(namcos22s_state::namcos22_sci_r), FUNC(namcos22s_state::namcos22_sci_w)); // C139 SCI registers
+	map(0x410000, 0x413fff).rw(m_sci, FUNC(namco_c139_device::ram_r), FUNC(namco_c139_device::ram_w));
+	map(0x420000, 0x42000f).m(m_sci, FUNC(namco_c139_device::regs_map_System22));
 	map(0x430000, 0x430003).w(FUNC(namcos22s_state::namcos22_cpuleds_w));
 	map(0x440000, 0x440003).portr("DSW");
 	map(0x450008, 0x45000b).rw(FUNC(namcos22s_state::namcos22_portbit_r), FUNC(namcos22s_state::namcos22_portbit_w));
@@ -2948,7 +2880,43 @@ TIMER_DEVICE_CALLBACK_MEMBER(adillor_state::trackball_update)
 	}
 }
 
+/*
+    Use the screen scanline to trigger comms handling multiple times per framew
+*/
+TIMER_DEVICE_CALLBACK_MEMBER(namcos22_state::screen_scanline)
+{
+	int scanline = param;
 
+	/*
+		We have to poll the transmissions, 
+		even if the sci registers haven't been set to send anything,
+		there may still be a need to pass on received data to the next PCB in the 'ring'
+	*/
+	if ((scanline == 0)|| (scanline == 100) || (scanline == 200) || (scanline == 300) || (scanline == 400))
+	{
+		m_sci->transmitHandlerGlobalComms_System22();
+
+
+		if (m_sci->receiveHandlerGlobalComms_System22())
+		{
+			// If data received, then fire interrupt
+			//TODO: Add a flag?
+			int line = 0x4;
+			if (m_irq_enabled & line)
+			{
+				m_irq_state |= line;
+				m_maincpu->set_input_line(m_syscontrol[2] & 7, ASSERT_LINE); // Wipe IRQ
+			}
+
+		}
+		else
+		{
+			m_sci->clearInterrupt(); //TODO: Should I move into loop above? (kills fullscale)
+		}
+	}
+
+	
+}
 
 /*********************************************************************************************/
 
@@ -3019,11 +2987,14 @@ static INPUT_PORTS_START( ridgeracf )
 	// DIP3-1 to DIP3-3 are for setting up the viewing angle (game used one board per screen?)
 	// Some of the other dipswitches are for debugging, like with Ridge Racer 2.
 	PORT_MODIFY("DSW")
-	PORT_DIPUNKNOWN_DIPLOC( 0x00010000, 0x00010000, "SW2:1" )
-	PORT_DIPNAME( 0x00020000, 0x00000000, "Unknown" ) PORT_DIPLOCATION("SW2:2") // always on?
-	PORT_DIPSETTING(          0x00020000, DEF_STR( Off ) )
-	PORT_DIPSETTING(          0x00000000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80000000, 0x80000000, "Test Mode 2" ) PORT_DIPLOCATION("SW3:8")
+
+	PORT_DIPNAME(0x00030000, 0x00000000, "PCB (screen) Select")
+	PORT_DIPSETTING(0x00000000, "Centre/Main (PCB 2)")
+	PORT_DIPSETTING(0x00010000, "Centre/Main (PCB 2)")
+	PORT_DIPSETTING(0x00020000, "Left (PCB 1)")
+	PORT_DIPSETTING(0x00030000, "Right (PCB 3)")
+	
+	PORT_DIPNAME( 0x80000000, 0x80000000, "Test Mode" ) PORT_DIPLOCATION("SW3:8")
 	PORT_DIPSETTING(          0x80000000, DEF_STR( Off ) )
 	PORT_DIPSETTING(          0x00000000, DEF_STR( On ) )
 INPUT_PORTS_END
@@ -3746,6 +3717,7 @@ void namcos22_state::namcos22(machine_config &config)
 	M68020(config, m_maincpu, 49.152_MHz_XTAL/2); // MC68020RP25E
 	m_maincpu->set_addrmap(AS_PROGRAM, &namcos22_state::namcos22_am);
 	m_maincpu->set_vblank_int("screen", FUNC(namcos22_state::namcos22_interrupt));
+	TIMER(config, "scantimer").configure_scanline(FUNC(namcos22s_state::screen_scanline), "screen", 0, 100);
 
 	tms32025_device& master(TMS32025(config, m_master, 40_MHz_XTAL));
 	master.set_addrmap(AS_PROGRAM, &namcos22_state::master_dsp_program);
@@ -3772,6 +3744,8 @@ void namcos22_state::namcos22(machine_config &config)
 	NAMCO_C74(config, m_mcu, 49.152_MHz_XTAL/3); // C74 on the CPU board has no periodic interrupts, it runs entirely off Timer A0
 	m_mcu->set_addrmap(AS_PROGRAM, &namcos22_state::mcu_s22_program);
 	m_mcu->p4_in_cb().set(FUNC(namcos22_state::mcu_port4_s22_r));
+
+	NAMCO_C139(config, m_sci, 0);
 
 	NAMCO_C74(config, m_iomcu, 6.144_MHz_XTAL);
 	m_iomcu->set_addrmap(AS_PROGRAM, &namcos22_state::iomcu_s22_program);
@@ -4207,7 +4181,6 @@ ROM_START( ridgeracf )
 	ROM_LOAD( "rr1gam.3d",   0x0100, 0x0100, CRC(b2161bce) SHA1(d2681cc0cf8e68df0d942d392b4eb4458c4bb356) )
 	ROM_LOAD( "rr1gam.4d",   0x0200, 0x0100, CRC(b2161bce) SHA1(d2681cc0cf8e68df0d942d392b4eb4458c4bb356) )
 ROM_END
-
 
 ROM_START( ridgera2 )
 	ROM_REGION( 0x200000, "maincpu", 0 ) /* main program */
@@ -6247,15 +6220,15 @@ GAME( 1993, ridgeraca,  ridgerac, namcos22,  ridgera,   namcos22_state,  init_ri
 GAME( 1993, ridgeracb,  ridgerac, namcos22,  ridgera,   namcos22_state,  init_ridgerac,  ROT0, "Namco", "Ridge Racer (US, RR3 Ver.B)", MACHINE_SUPPORTS_SAVE | MACHINE_IMPERFECT_GRAPHICS ) // 1994-01-17, reports as "-Foreign B-" RR3 means USA?
 GAME( 1993, ridgeracc,  ridgerac, namcos22,  ridgera,   namcos22_state,  init_ridgerac,  ROT0, "Namco", "Ridge Racer (US, RR3)", MACHINE_SUPPORTS_SAVE | MACHINE_IMPERFECT_GRAPHICS ) // 1993-10-28, purportedly 3 Screen version, reports as "-Foreign B-"
 GAME( 1993, ridgeracj,  ridgerac, namcos22,  ridgera,   namcos22_state,  init_ridgerac,  ROT0, "Namco", "Ridge Racer (Japan, RR1)", MACHINE_SUPPORTS_SAVE | MACHINE_IMPERFECT_GRAPHICS ) // 1993-10-07
-GAME( 1993, ridgeracf,  ridgerac, namcos22,  ridgeracf, namcos22_state,  init_ridgerac,  ROT0, "Namco", "Ridge Racer Full Scale (World, RRF2)", MACHINE_SUPPORTS_SAVE | MACHINE_IMPERFECT_GRAPHICS | MACHINE_NOT_WORKING ) // 1993-12-13, very different version, incomplete dump.
-GAME( 1994, ridgera2,   0,        namcos22,  ridgera2,  namcos22_state,  init_ridgera2,  ROT0, "Namco", "Ridge Racer 2 (World, RRS2)", MACHINE_SUPPORTS_SAVE | MACHINE_IMPERFECT_GRAPHICS | MACHINE_NODEVICE_LAN ) // 1994-06-21 - NOT labeled "B" but based off Japan Rev.B
-GAME( 1994, ridgera2j,  ridgera2, namcos22,  ridgera2,  namcos22_state,  init_ridgera2,  ROT0, "Namco", "Ridge Racer 2 (Japan, RRS1 Ver.B)", MACHINE_SUPPORTS_SAVE | MACHINE_IMPERFECT_GRAPHICS | MACHINE_NODEVICE_LAN ) // 1994-06-21
-GAME( 1994, ridgera2ja, ridgera2, namcos22,  ridgera2,  namcos22_state,  init_ridgera2,  ROT0, "Namco", "Ridge Racer 2 (Japan, RRS1)", MACHINE_SUPPORTS_SAVE | MACHINE_IMPERFECT_GRAPHICS | MACHINE_NODEVICE_LAN ) // 1994-06-13
-GAME( 1994, ridgera28,  ridgera2, namcos22,  ridgera2,  namcos22_state,  init_ridgera2,  ROT0, "Namco", "Ridge Racer 2 (World, RRS8)", MACHINE_SUPPORTS_SAVE | MACHINE_IMPERFECT_GRAPHICS | MACHINE_NODEVICE_LAN ) // 1994-XX-XX - Test Location / proto??
-GAME( 1994, cybrcomm,   0,        cybrcomm,  cybrcomm,  namcos22_state,  init_cybrcomm,  ROT0, "Namco", "Cyber Commando (Japan, CY1)", MACHINE_SUPPORTS_SAVE | MACHINE_IMPERFECT_GRAPHICS | MACHINE_NODEVICE_LAN ) // 10/14/94
-GAME( 1995, raverace,   0,        namcos22,  raverace,  namcos22_state,  init_raverace,  ROT0, "Namco", "Rave Racer (World, RV2 Ver.B)", MACHINE_SUPPORTS_SAVE | MACHINE_IMPERFECT_GRAPHICS | MACHINE_NODEVICE_LAN ) // 07/16/95
-GAME( 1995, raveracej,  raverace, namcos22,  raverace,  namcos22_state,  init_raverace,  ROT0, "Namco", "Rave Racer (Japan, RV1 Ver.B)", MACHINE_SUPPORTS_SAVE | MACHINE_IMPERFECT_GRAPHICS | MACHINE_NODEVICE_LAN ) // 07/16/95
-GAME( 1995, raveraceja, raverace, namcos22,  raverace,  namcos22_state,  init_raverace,  ROT0, "Namco", "Rave Racer (Japan, RV1)", MACHINE_SUPPORTS_SAVE | MACHINE_IMPERFECT_GRAPHICS | MACHINE_NODEVICE_LAN ) // 06/29/95
+GAME( 1993, ridgeracf,  ridgerac, namcos22,  ridgeracf, namcos22_state,  init_ridgerac,  ROT0, "Namco", "Ridge Racer Full Scale (World, RRF2)", MACHINE_SUPPORTS_SAVE   ) // 1993-12-13, very different version, incomplete dump.
+GAME( 1994, ridgera2,   0,        namcos22,  ridgera2,  namcos22_state,  init_ridgera2,  ROT0, "Namco", "Ridge Racer 2 (World, RRS2)", MACHINE_SUPPORTS_SAVE ) // 1994-06-21 - NOT labeled "B" but based off Japan Rev.B
+GAME( 1994, ridgera2j,  ridgera2, namcos22,  ridgera2,  namcos22_state,  init_ridgera2,  ROT0, "Namco", "Ridge Racer 2 (Japan, RRS1 Ver.B)", MACHINE_SUPPORTS_SAVE ) // 1994-06-21
+GAME( 1994, ridgera2ja, ridgera2, namcos22,  ridgera2,  namcos22_state,  init_ridgera2,  ROT0, "Namco", "Ridge Racer 2 (Japan, RRS1)", MACHINE_SUPPORTS_SAVE ) // 1994-06-13
+GAME( 1994, ridgera28,  ridgera2, namcos22,  ridgera2,  namcos22_state,  init_ridgera2,  ROT0, "Namco", "Ridge Racer 2 (World, RRS8)", MACHINE_SUPPORTS_SAVE ) // 1994-XX-XX - Test Location / proto??
+GAME( 1994, cybrcomm,   0,        cybrcomm,  cybrcomm,  namcos22_state,  init_cybrcomm,  ROT0, "Namco", "Cyber Commando (Japan, CY1)", MACHINE_SUPPORTS_SAVE ) // 10/14/94
+GAME( 1995, raverace,   0,        namcos22,  raverace,  namcos22_state,  init_raverace,  ROT0, "Namco", "Rave Racer (World, RV2 Ver.B)", MACHINE_SUPPORTS_SAVE  ) // 07/16/95
+GAME( 1995, raveracej,  raverace, namcos22,  raverace,  namcos22_state,  init_raverace,  ROT0, "Namco", "Rave Racer (Japan, RV1 Ver.B)", MACHINE_SUPPORTS_SAVE ) // 07/16/95
+GAME( 1995, raveraceja, raverace, namcos22,  raverace,  namcos22_state,  init_raverace,  ROT0, "Namco", "Rave Racer (Japan, RV1)", MACHINE_SUPPORTS_SAVE ) // 06/29/95
 GAME( 1994, acedrive,   0,        namcos22,  acedrive,  namcos22_state,  init_acedrive,  ROT0, "Namco", "Ace Driver: Racing Evolution (World, AD2)", MACHINE_SUPPORTS_SAVE | MACHINE_IMPERFECT_GRAPHICS | MACHINE_NODEVICE_LAN ) // 94/10/20 16:22:25
 GAME( 1996, victlap,    0,        namcos22,  victlap,   namcos22_state,  init_victlap,   ROT0, "Namco", "Ace Driver: Victory Lap (World, ADV2 Ver.B)", MACHINE_SUPPORTS_SAVE | MACHINE_IMPERFECT_GRAPHICS | MACHINE_NODEVICE_LAN ) // 96/05/21 19:39:59
 GAME( 1996, victlapa,   victlap,  namcos22,  victlap,   namcos22_state,  init_victlap,   ROT0, "Namco", "Ace Driver: Victory Lap (World, ADV2)", MACHINE_SUPPORTS_SAVE | MACHINE_IMPERFECT_GRAPHICS | MACHINE_NODEVICE_LAN ) // 96/02/13 17:29:10

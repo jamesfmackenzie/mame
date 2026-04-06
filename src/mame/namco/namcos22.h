@@ -15,6 +15,7 @@
 #include "machine/mb87078.h"
 #include "namcomcu.h"
 #include "machine/timer.h"
+#include "namco_c139.h"
 #include "sound/c352.h"
 #include "video/rgbutil.h"
 #include "video/poly.h"
@@ -208,6 +209,7 @@ public:
 		m_eeprom(*this, "eeprom"),
 		m_mb87078(*this, "mb87078"),
 		m_c352(*this, "c352"),
+		m_sci(*this, "sci"),
 		m_shareram(*this, "shareram"),
 		m_slave_extram(*this, "slaveextram"),
 		m_master_extram(*this, "masterextram"),
@@ -271,6 +273,8 @@ public:
 	optional_shared_ptr<u32> m_spriteram;
 	required_device<gfxdecode_device> m_gfxdecode;
 
+	TIMER_DEVICE_CALLBACK_MEMBER(screen_scanline); // SCI trigger
+
 protected:
 	virtual void machine_reset() override;
 	virtual void machine_start() override;
@@ -318,8 +322,6 @@ protected:
 	u16 dsp_slave_port8_r();
 	u16 dsp_slave_portb_r();
 	void dsp_slave_portb_w(u16 data);
-	u16 namcos22_sci_r(offs_t offset);
-	void namcos22_sci_w(offs_t offset, u16 data);
 	u16 namcos22_shared_r(offs_t offset);
 	void namcos22_shared_w(offs_t offset, u16 data, u16 mem_mask = ~0);
 	u16 namcos22_keycus_r(offs_t offset);
@@ -421,6 +423,7 @@ protected:
 	required_device<eeprom_parallel_28xx_device> m_eeprom;
 	optional_device<mb87078_device> m_mb87078;
 	required_device<c352_device> m_c352;
+	required_device<namco_c139_device> m_sci;
 	required_shared_ptr<u16> m_shareram;
 	required_shared_ptr<u16> m_slave_extram;
 	required_shared_ptr<u16> m_master_extram;
