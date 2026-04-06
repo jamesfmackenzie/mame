@@ -39,18 +39,27 @@ osd_window::osd_window(running_machine &machine, int index, std::shared_ptr<osd_
 	m_renderer(nullptr),
 	m_main(nullptr),
 	m_title(
-			util::string_format(
-				(video_config.numscreens > 1)
-					? "%3$s [%4$s] screen %5$d - %1$s %2$s (%6$s%7$sP%8$d)"
-					: "%3$s [%4$s] - %1$s %2$s (%6$s%7$sP%8$d)",
-					emulator_info::get_appname(),
-					emulator_info::get_bare_build_version(),
-					machine.system().type.fullname(),
-					machine.system().name,
-					index,
-					(sizeof(int) == sizeof(void *)) ? "I" : "",
-					(sizeof(long) == sizeof(void *)) ? "L" : (sizeof(long long) == sizeof(void *)) ? "LL" : "",
-					sizeof(void *) * 8))
+			[&machine, index]() -> std::string
+			{
+				char const *const window_tag = std::getenv("MAME_WINDOW_TAG");
+				char const *const title_format =
+						(video_config.numscreens > 1)
+							? "%3$s [%4$s] screen %5$d - %1$s %2$s (%6$s%7$sP%8$d)"
+							: "%3$s [%4$s] - %1$s %2$s (%6$s%7$sP%8$d)";
+				std::string title = util::string_format(
+						title_format,
+						emulator_info::get_appname(),
+						emulator_info::get_bare_build_version(),
+						machine.system().type.fullname(),
+						machine.system().name,
+						index,
+						(sizeof(int) == sizeof(void *)) ? "I" : "",
+						(sizeof(long) == sizeof(void *)) ? "L" : (sizeof(long long) == sizeof(void *)) ? "LL" : "",
+						sizeof(void *) * 8);
+				if (window_tag && *window_tag)
+					title.append(util::string_format(" [%s]", window_tag));
+				return title;
+			}())
 {
 }
 
