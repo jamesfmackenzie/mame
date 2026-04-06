@@ -95,8 +95,6 @@ private:
 	uint16_t m_regs[8] = { 0 };
 	uint16_t m_transmit_go{ 0 };
 	uint16_t m_end_of_message{ 0 };
-	uint16_t m_wordsToSend{ 0 };
-	int m_txpackets{ 0 };
 	uint8_t m_interrupt_set{ 0 };
 		
 	

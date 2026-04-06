@@ -79,7 +79,7 @@ enum
 	LINK_NOT_ESTABLISHED = 0x00,
 	LINK_OK = 0x01,
 	LINK_FAIL = 0x02,
-}globalCommsStates;
+};
 
 //**************************************************************************
 //  LIVE DEVICE
@@ -544,15 +544,12 @@ void namco_c139_device::send_frame(int dataSize) {
 		return;
 
 	std::uint32_t written;
+	const std::error_condition err = m_line_tx->write(&m_buffer_tx, 0, dataSize, written);
 
-	std::error_condition filer = m_line_tx->write(&m_buffer_tx, 0, dataSize, written);
-
-	if (written != dataSize)
+	if (err || (written != dataSize))
 	{
 		osd_printf_verbose("C139COMM: TX problem\n");
-
 	}
-	
 }
 
 
@@ -563,6 +560,7 @@ void namco_c139_device::loop_frame(int dataSize, int offset)
 		return;
 
 	std::uint32_t written;
-
-	std::error_condition filerr = m_line_tx->write(&m_buffer_rx, offset, dataSize, written);
+	const std::error_condition err = m_line_tx->write(&m_buffer_rx, offset, dataSize, written);
+	if (err || (written != dataSize))
+		osd_printf_verbose("C139COMM: loop TX problem\n");
 }
