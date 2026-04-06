@@ -26,6 +26,7 @@ WINDOW_GEOMETRY="${WINDOW_GEOMETRY:-640x480}"
 # freeze observed with "opengl".  Set VIDEO=opengl to revert to the old path.
 VIDEO="${VIDEO:-soft}"
 WAIT_TIMEOUT="${WAIT_TIMEOUT:-30}"
+ROM_PATH="${ROM_PATH:-$ROOT_DIR/roms}"
 
 if [[ ! -x "$MAME_BIN" ]]; then
 	echo "MAME binary not found or not executable." >&2
@@ -100,6 +101,7 @@ echo "Launching LEFT / PCB 1..."
 MAME_WINDOW_TAG=LEFT "$MAME_BIN" "$GAME" -window -skip_gameinfo -verbose \
 	-video "$VIDEO" \
 	-resolution "$WINDOW_GEOMETRY" \
+	-rompath "$ROM_PATH" \
 	-cfg_directory "$ROOT_DIR/cfg_rrf_l" \
 	-nvram_directory "$ROOT_DIR/nvram_rrf_l" \
 	-state_directory "$ROOT_DIR/sta_rrf_l" \
@@ -116,6 +118,7 @@ echo "Launching CENTER / PCB 2..."
 MAME_WINDOW_TAG=CENTER "$MAME_BIN" "$GAME" -window -skip_gameinfo -verbose \
 	-video "$VIDEO" \
 	-resolution "$WINDOW_GEOMETRY" \
+	-rompath "$ROM_PATH" \
 	-cfg_directory "$ROOT_DIR/cfg_rrf_c" \
 	-nvram_directory "$ROOT_DIR/nvram_rrf_c" \
 	-state_directory "$ROOT_DIR/sta_rrf_c" \
@@ -132,6 +135,7 @@ echo "Launching RIGHT / PCB 3..."
 MAME_WINDOW_TAG=RIGHT "$MAME_BIN" "$GAME" -window -skip_gameinfo -verbose \
 	-video "$VIDEO" \
 	-resolution "$WINDOW_GEOMETRY" \
+	-rompath "$ROM_PATH" \
 	-cfg_directory "$ROOT_DIR/cfg_rrf_r" \
 	-nvram_directory "$ROOT_DIR/nvram_rrf_r" \
 	-state_directory "$ROOT_DIR/sta_rrf_r" \
