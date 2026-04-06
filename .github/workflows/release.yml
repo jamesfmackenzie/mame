@@ -1,0 +1,115 @@
+name: Release Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v0.251-namco-c139-jb-1)'
+        required: true
+        default: 'v0.251-namco-c139-jb-1'
+      prerelease:
+        description: 'Mark as pre-release'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install dependencies
+      run: brew install python3 sdl2
+    - name: Build
+      env:
+        USE_LIBSDL: 1
+        TOOLS: 1
+      run: make -j$(sysctl -n hw.logicalcpu)
+    - name: Package
+      run: |
+        zip mame-macos-arm64.zip \
+          mame \
+          chdman \
+          unidasm \
+          run_ridgeracf_link.sh \
+          scripts/run/ridgeracf-link.sh
+    - uses: actions/upload-artifact@v4
+      with:
+        name: mame-macos
+        path: mame-macos-arm64.zip
+
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+    - uses: msys2/setup-msys2@v2
+      with:
+        install: >-
+          git
+          make
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-python
+          mingw-w64-x86_64-lld
+          mingw-w64-x86_64-libc++
+    - uses: actions/checkout@v4
+    - name: Build
+      env:
+        MINGW64: "/mingw64"
+        OVERRIDE_AR: "llvm-ar"
+        OVERRIDE_CC: gcc
+        OVERRIDE_CXX: g++
+        ARCHOPTS: "-fuse-ld=lld"
+        TOOLS: 1
+      run: make -j$(nproc)
+    - name: Package
+      run: zip mame-windows-x64.zip mame.exe chdman.exe unidasm.exe
+    - uses: actions/upload-artifact@v4
+      with:
+        name: mame-windows
+        path: mame-windows-x64.zip
+
+  create-release:
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        merge-multiple: true
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ github.event.inputs.tag }}
+        name: ${{ github.event.inputs.tag }}
+        prerelease: ${{ github.event.inputs.prerelease }}
+        body: |
+          MAME build from the `namco-c139-jb` branch — adds Ridge Racer Full Scale
+          linked-play support (Namco C139 serial board emulation).
+
+          ## Downloads
+
+          | Platform | File |
+          |----------|------|
+          | macOS (Apple Silicon, ARM64) | `mame-macos-arm64.zip` |
+          | Windows (x64) | `mame-windows-x64.zip` |
+
+          ## Contents
+
+          Each archive includes the `mame` / `mame.exe` binary plus `chdman` and
+          `unidasm`. The macOS archive also includes the `ridgeracf-link.sh`
+          launcher script for running three linked Ridge Racer Full Scale instances.
+
+          ## Usage (macOS linked play)
+
+          ```
+          bash scripts/run/ridgeracf-link.sh
+          ```
+
+          Set `ROM_PATH` to your ROMs directory if it is not `./roms`.
+        files: |
+          mame-macos-arm64.zip
+          mame-windows-x64.zip
