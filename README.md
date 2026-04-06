@@ -17,6 +17,157 @@ Static analysis status for entire build (except for third-party parts of project
 
 [![Coverity Scan Status](https://scan.coverity.com/projects/5727/badge.svg?flat=1)](https://scan.coverity.com/projects/mame-emulator)
 
+Ridge Racer Full Scale 3-Screen Branch
+======================================
+
+This branch is a custom build of MAME for running **Ridge Racer Full Scale** across three linked screens on a single machine.
+
+**Visible credit:** the Ridge Racer Full Scale changes in this branch were authored by **John Bennett**. This repo packages those changes together with the launcher and operating notes needed to bring up a 3-screen linked setup reliably.
+
+What Is Ridge Racer Full Scale?
+===============================
+
+Ridge Racer Full Scale is the three-screen deluxe version of Ridge Racer. Instead of a single cabinet view, it uses linked left, center, and right displays to create a much wider field of view and a more cabinet-accurate presentation.
+
+How This Custom Build Helps
+===========================
+
+This branch includes the extra pieces needed to launch three custom MAME instances and link them together for an ultra-wide Ridge Racer Full Scale experience:
+
+* support for the required Ridge Racer Full Scale link behavior
+* a dedicated 3-instance launcher script
+* per-screen config, NVRAM, state, and diff directories
+* window title tagging so each instance is clearly identified as `LEFT`, `CENTER`, or `RIGHT`
+* logging to help confirm the link ring comes up correctly
+
+How To Launch
+=============
+
+From the project root, run:
+
+```sh
+./scripts/run/ridgeracf-link.sh
+```
+
+The first time you launch it, configure the in-game DIP switches so each instance matches its assigned cabinet role. After that, the saved configuration will be reused.
+
+The launcher starts three instances in this repo's actual bring-up order:
+
+1. `LEFT`
+2. `CENTER`
+3. `RIGHT`
+
+The logical communication ring is still:
+
+`CENTER -> RIGHT -> LEFT -> CENTER`
+
+Cabinet Role Mapping And DIP Switches
+=====================================
+
+The window title tells you which role each running instance expects. Match the cabinet-role DIP setting to the same role:
+
+| Window tag | Cabinet role | PCB select | Local port | Remote port |
+| --- | --- | --- | --- | --- |
+| `LEFT` | Left | PCB 1 | `15111` | `15112` |
+| `CENTER` | Center / Main | PCB 2 | `15112` | `15113` |
+| `RIGHT` | Right | PCB 3 | `15113` | `15111` |
+
+In this branch, `ridgeracf` exposes the role directly as a tri-state DIP selector named `PCB (screen) Select` in the `DSW` input port. The available values in the driver are:
+
+| PCB (screen) Select | Use for |
+| --- | --- |
+| `Centre/Main (PCB 2)` | `CENTER` |
+| `Left (PCB 1)` | `LEFT` |
+| `Right (PCB 3)` | `RIGHT` |
+
+Set each running instance to the role shown in its window title. Once this has been configured once, the per-instance saved configuration is reused on later launches.
+
+If the selected PCB role does not match the window tag and port mapping, the link ring will be mis-assigned even if the network ports are correct.
+
+How To Build
+============
+
+Build this branch the same way you would build any other version of MAME. The standard MAME build instructions below still apply.
+
+Technical Details
+=================
+
+Code changes in this branch
+===========================
+
+At a high level, this work takes the Ridge Racer Full Scale support from the MAME 0.251-era codebase and adds the pieces needed to make a practical 3-screen linked setup usable:
+
+* Namco `C139` link communication support used by Ridge Racer Full Scale
+* Ridge Racer Full Scale driver support in `namcos22`
+* window-title tagging via `MAME_WINDOW_TAG` so each instance is easy to identify during setup
+* a dedicated launcher script at `scripts/run/ridgeracf-link.sh`
+
+Ring topology
+=============
+
+The configured ring is:
+
+`CENTER -> RIGHT -> LEFT -> CENTER`
+
+Each instance listens on a local TCP port and forwards to the next role in the ring:
+
+* `LEFT`: `15111 -> 15112`
+* `CENTER`: `15112 -> 15113`
+* `RIGHT`: `15113 -> 15111`
+
+Parameters used by the launcher script
+======================================
+
+The launcher defaults are:
+
+```sh
+GAME=ridgeracf
+WINDOW_GEOMETRY=640x480
+VIDEO=soft
+WAIT_TIMEOUT=30
+ROM_PATH=./roms
+```
+
+Per instance, the script sets:
+
+* `-window -skip_gameinfo -verbose`
+* `-video "$VIDEO"`
+* `-resolution "$WINDOW_GEOMETRY"`
+* `-rompath "$ROM_PATH"`
+* dedicated `cfg`, `nvram`, `sta`, and `diff` directories for each role
+* `-comm_localhost 0.0.0.0`
+* role-specific `-comm_localport`, `-comm_remotehost`, and `-comm_remoteport`
+
+Extra command-line arguments passed to `scripts/run/ridgeracf-link.sh` are forwarded to all three launched MAME instances.
+
+Startup order
+=============
+
+The script launches and waits for each listener in this order:
+
+1. `LEFT`
+2. `CENTER`
+3. `RIGHT`
+
+This is the startup order implemented by this branch. The cabinet role mapping and the communication ring shown above remain the important reference points during setup.
+
+Diagnostic logs
+===============
+
+The launcher creates one log per role in the project root:
+
+* `rrf_left.log`
+* `rrf_center.log`
+* `rrf_right.log`
+
+These logs are used to confirm that each instance is listening and that the `C139COMM` link setup is coming up as expected. To watch them live:
+
+```sh
+tail -f rrf_left.log
+tail -f rrf_center.log
+tail -f rrf_right.log
+```
+
 What is MAME?
 =============
 
