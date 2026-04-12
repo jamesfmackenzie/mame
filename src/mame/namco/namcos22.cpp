@@ -2998,13 +2998,14 @@ static INPUT_PORTS_START( ridgeracf )
 	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_BUTTON6 ) PORT_NAME("MT Switch")
 	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_SERVICE2 )
 
-	// DIP3-1 to DIP3-3 are for setting up the viewing angle (game used one board per screen?)
-	// Some of the other dipswitches are for debugging, like with Ridge Racer 2.
+	// SW2:1 (bit 16) and SW2:2 (bit 17) encode the PCB identity for the 3-screen installation.
+	// Each of the three identical boards is configured by the operator via these switches.
+	// The center board generates and transmits scene data; right relays to left; left receives only.
 	PORT_MODIFY("DSW")
-	PORT_DIPUNKNOWN_DIPLOC( 0x00010000, 0x00010000, "SW2:1" )
-	PORT_DIPNAME( 0x00020000, 0x00000000, "Unknown" ) PORT_DIPLOCATION("SW2:2") // always on?
-	PORT_DIPSETTING(          0x00020000, DEF_STR( Off ) )
-	PORT_DIPSETTING(          0x00000000, DEF_STR( On ) )
+	PORT_CONFNAME( 0x00030000, 0x00000000, "PCB Role (3-Screen)" )
+	PORT_CONFSETTING(          0x00000000, "Center (master — generates and TX scene data)" )
+	PORT_CONFSETTING(          0x00020000, "Right Screen (forwarder — relays to left)" )
+	PORT_CONFSETTING(          0x00030000, "Left Screen (slave — receive only)" )
 	PORT_DIPNAME( 0x80000000, 0x80000000, "Test Mode 2" ) PORT_DIPLOCATION("SW3:8")
 	PORT_DIPSETTING(          0x80000000, DEF_STR( Off ) )
 	PORT_DIPSETTING(          0x00000000, DEF_STR( On ) )
@@ -3665,6 +3666,21 @@ void namcos22_state::machine_start()
 	save_item(NAME(m_render_refresh));
 	save_item(NAME(m_pdp_frame));
 	save_item(NAME(m_pdp_base));
+
+	// Configure C139 topology role for ridgeracf (3-screen installation).
+	// SW2:1 (bit 16) + SW2:2 (bit 17) identify this PCB in the ring:
+	//   0x00000 = center  (master — originates TX; default role)
+	//   0x20000 = right   (forwarder — relays center data to left screen)
+	//   0x30000 = left    (slave — receive only)
+	if (strcmp(machine().system().name, "ridgeracf") == 0)
+	{
+		const u32 pcb = ioport("DSW")->read() & 0x00030000U;
+		if (pcb == 0x00020000U)
+			m_sci->set_role(namco_c139_device::role_t::FORWARDER);
+		else if (pcb == 0x00030000U)
+			m_sci->set_role(namco_c139_device::role_t::SLAVE);
+		// 0x00000 = center — default role_t::CENTER, no call needed
+	}
 }
 
 void namcos22s_state::machine_start()

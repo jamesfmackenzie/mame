@@ -47,6 +47,19 @@ public:
 	// IRQ callback — fired when a communication event occurs (mode-dependent)
 	auto irq_cb() { return m_irq_cb.bind(); }
 
+	// Topology role — controls relay behaviour for multi-cabinet installations.
+	// Must be set by the game driver in machine_start() before the first device_reset().
+	// Default CENTER is correct for all single-cabinet and 2-cabinet linked games.
+	//
+	//   CENTER    — originates TX frames; receives RX frames (standard operation)
+	//   FORWARDER — receives from CENTER and immediately relays to SLAVE (ASIO thread,
+	//               no CPU involvement); also fires IRQ so its own CPU can render
+	//   SLAVE     — receives only; no relay, no TX
+	//
+	// ridgeracf ring: Center → Forwarder (right screen) → Slave (left screen)
+	enum class role_t { CENTER, FORWARDER, SLAVE };
+	void set_role(role_t role) { m_role = role; }
+
 	// Address maps for driver wiring
 	void data_map(address_map &map) ATTR_COLD;   // 0x0000–0x3FFF  (0x2000 words of RAM)
 	void regs_map(address_map &map) ATTR_COLD;   // 0x00–0x0F      (8 × 16-bit registers)
@@ -84,6 +97,8 @@ private:
 	uint16_t m_link_timer = 0;
 
 	emu_timer *m_tick_timer = nullptr;
+
+	role_t   m_role = role_t::CENTER;
 
 	// ASIO networking context (opaque — defined in .cpp)
 	class net_context;

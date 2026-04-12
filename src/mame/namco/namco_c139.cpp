@@ -136,8 +136,11 @@ public:
 
 	void reset(
 		const std::string &localhost, const std::string &localport,
-		const std::string &remotehost, const std::string &remoteport)
+		const std::string &remotehost, const std::string &remoteport,
+		namco_c139_device::role_t role)
 	{
+		m_role = role;
+
 		std::error_code err;
 		asio::ip::tcp::resolver resolver(m_ioctx);
 
@@ -418,6 +421,24 @@ private:
 							start_accept();
 							return;
 						}
+						// FORWARDER: relay bytes to next node (left screen) in the ASIO
+						// thread immediately, without involving the emulation CPU.
+						// This approximates the Y-split broadcast on real hardware.
+						if (m_role == namco_c139_device::role_t::FORWARDER
+							&& m_state_tx.load() == 2)
+						{
+							if (m_fifo_tx.free() >= n)
+							{
+								const bool was_empty = (m_fifo_tx.used() == 0);
+								m_fifo_tx.write(&m_buf_rx[0], n);
+								if (was_empty)
+									start_send_tx();
+							}
+							else
+							{
+								osd_printf_verbose("C139 [%s]: relay TX FIFO overflow\n", m_device.tag());
+							}
+						}
 						start_receive_rx();
 					}
 				});
@@ -450,6 +471,7 @@ private:
 	}
 
 	namco_c139_device &m_device;
+	namco_c139_device::role_t m_role = namco_c139_device::role_t::CENTER;
 	std::thread m_thread;
 	asio::io_context m_ioctx;
 	asio::executor_work_guard<asio::io_context::executor_type> m_work_guard{m_ioctx.get_executor()};
@@ -572,7 +594,7 @@ void namco_c139_device::device_reset()
 
 	// reset connection and start the comm tick timer
 	m_link_timer = LINK_TIMER_INIT;
-	m_net->reset(m_localhost, m_localport, m_remotehost, m_remoteport);
+	m_net->reset(m_localhost, m_localport, m_remotehost, m_remoteport, m_role);
 	m_tick_timer->adjust(attotime::from_hz(COMM_TICK_HZ), 0, attotime::from_hz(COMM_TICK_HZ));
 }
 
@@ -678,6 +700,11 @@ void namco_c139_device::comm_tick()
 
 	// always try to receive any incoming data
 	recv_data();
+
+	// FORWARDER relays in the ASIO thread; SLAVE never transmits.
+	// Only CENTER generates its own TX frames.
+	if (m_role != role_t::CENTER)
+		return;
 
 	// mode-specific TX trigger
 	switch (m_reg[REG_1_MODE])
