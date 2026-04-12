@@ -13,7 +13,7 @@
    - Technical reference: bus, serial, RAM, registers, modes
    - Usage across System boards
    - Maturity in MAME master
-2. [Our Enhanced C139 Implementations](#our-enhanced-c139-implementations)
+2. [Enhanced C139 Implementations](#enhanced-c139-implementations)
    - JB implementation
    - SS implementation
    - Comparison and recommendations
@@ -22,7 +22,7 @@
    - Ring topology and data flow
    - Key methods and rendering pipeline
    - Wire format details
-4. [Issues with Current Implementations](#issues-with-current-implementations)
+4. [Known Issues with Enhanced Implementations](#known-issues-with-enhanced-implementations)
 5. [Fixes and Next Steps](#fixes-and-next-steps)
 6. [Strategic C139 Implementation Plan](#strategic-c139-implementation-plan)
 
@@ -85,7 +85,7 @@ The C139 appears across three Namco hardware platforms:
 | Armadillo Racing | 1997 | Linked |
 
 ### System 23 (1997+) — C422 variant
-Final Furlong 2, Motocross Go!, and other S23 titles use the C422 upgrade. Mode 0x0B is used for interrupt testing; transmission sizes of ~0xF6 words observed.
+Final Furlong 2, Motocross Go!, and other S23 titles use the C422 upgrade.
 
 ---
 
@@ -95,17 +95,17 @@ Final Furlong 2, Motocross Go!, and other S23 titles use the C422 upgrade. Mode 
 
 ```
                     ┌────────────────────────────────────┐
-                    │           Namco C139                │
+                    │           Namco C139               │
 Host CPU ──────────►│  14-bit address, 13-bit data       │
-                    │  CS-, R/W-, RES-, DTACK-, DT-       │
-                    │  12MHz clock, 16MHz clock           │◄── Clocks
-                    │  IRQ- (active low output)           │───► CPU interrupt
-                    │                                     │
+                    │  CS-, R/W-, RES-, DTACK-, DT-      │
+                    │  12MHz clock, 16MHz clock          │◄── Clocks
+                    │  IRQ- (active low output)          │───► CPU interrupt
+                    │                                    │
 External SRAM ◄────►│  13-bit address, 9-bit data        │
-(M5M5179P 9-bit)    │                                     │
-                    │  RINGOUT  ──────────────────────────│───► Serial TX
-                    │  RINGINA / RINGINK ─────────────────│◄─── Serial RX (differential)
-                    │  RINGON (from C148 !SRES) ──────────│─── Controls RINGSW
+(M5M5179P 9-bit)    │                                    │
+                    │  RINGOUT  ─────────────────────────│───► Serial TX
+                    │  RINGINA / RINGINK ────────────────│◄─── Serial RX (differential)
+                    │  RINGON (from C148 !SRES) ─────────│─── Controls RINGSW
                     └────────────────────────────────────┘
 ```
 
@@ -132,7 +132,7 @@ For Ridge Racer Full Scale (3 screens), the center PCB's `RINGOUT` is **Y-split 
 - **Bit order**: MSB first — bit 8 (sync bit) transmitted first, then bits 7–0
 - **Frame**: `[START(0)] [bit8] [bit7] [bit6] [bit5] [bit4] [bit3] [bit2] [bit1] [bit0] [STOP(1)]` = 11 line states per word
 
-The **sync bit** (bit 8) is central to interrupt signalling in modes 0x0C and 0x0D — the chip fires an interrupt when a word is received with bit 8 set.
+The **sync bit** (bit 8) is central to interrupt signalling in modes 0x0C and 0x0D (see mode table below). The chip fires an interrupt when a word is received with bit 8 set.
 
 ### RAM Layout
 
@@ -292,17 +292,20 @@ This means **every multi-cabinet Namco game from 1987–1997** (Final Lap, Winni
 
 ---
 
-# Our Enhanced C139 Implementations
+# Enhanced C139 Implementations
 
-## JB Implementation
+## John Bennett Implementation
 
 **Author**: John Bennett  
-**Origin**: Independent proof-of-concept, predates SS implementation  
-**Header comment**: *"Hacky Proof of Concept (TM)"*
+**Origin**: Independent proof-of-concept, predates SailorSat implementation below
+**Header comment**: *"Hacky Proof of Concept (TM)"*  
+**Further reading**: https://forum.arcadecontrols.com/index.php?topic=165638.0
+
+John Bennett's initial working attempt to emulate the C139 for multi-cabinet linking. It is a game-specific, proof-of-concept device that successfully drove the research and established the protocol fundamentals, but was never intended for mainline MAME submission.
 
 ### Approach
 
-JB implemented the C139 as a working network device using **MAME's built-in LAN socket system** (the same mechanism used by Sega Model 1/2 linking). Multiple MAME instances communicate via TCP sockets assigned at launch.
+John implemented the C139 as a working network device using **MAME's built-in LAN socket system** (the same mechanism used by Sega Model 1/2 linking). Multiple MAME instances communicate via TCP sockets assigned at launch.
 
 ### Architecture
 
@@ -310,7 +313,7 @@ JB implemented the C139 as a working network device using **MAME's built-in LAN 
 MAME Instance A                    MAME Instance B
 ┌──────────────────┐               ┌──────────────────┐
 │  C139 device     │               │  C139 device     │
-│  MAME LAN socket │◄─── TCP ────►│  MAME LAN socket │
+│  MAME LAN socket │◄──── TCP ────►│  MAME LAN socket │
 │  (no ASIO)       │               │  (no ASIO)       │
 └──────────────────┘               └──────────────────┘
 ```
@@ -343,28 +346,31 @@ MAME Instance A                    MAME Instance B
 
 ---
 
-## SS Implementation
+## SailorSat Implementation
 
 **Author**: Ariane Fugmann (with contributions from Angelo Salese, John Bennett)  
-**Based on**: JB work, substantially rewritten  
+**Based on**: John Bennett's original work, but substantially rewritten  
+**Further reading**: https://forum.arcadecontrols.com/index.php/topic,165638.80.html
+
+The SailorSat implementation is a significant rewrite of the John Bennett approach by Ariane Fugmann. It replaces game-specific code paths with a unified register model and moves networking onto a dedicated ASIO thread, making it architecturally much closer to what a submittable MAME device would look like. It is the most mature reference implementation available.
 
 ### Approach
 
-SS replaced MAME's LAN sockets with a dedicated **ASIO TCP networking thread** running independently of the emulation thread. This gives lower latency, cleaner separation, and allows per-instance port assignment via command-line options.
+Ariane replaced MAME's LAN sockets with a dedicated **ASIO TCP networking thread** running independently of the emulation thread. This gives lower latency, cleaner separation, and allows per-instance port assignment via command-line options.
 
 ### Architecture
 
 ```
-MAME Instance (emulation thread)      Background thread
-┌─────────────────────────────┐       ┌─────────────────────────────┐
-│  CPU reads/writes C139 RAM  │       │  ASIO io_context            │
-│  comm_tick() fires @ 12MHz  │       │  async_accept / async_read  │
-│  ─ checks FIFOs ──────────►│──FIFO─►│  async_connect / async_write│
-│  ─ fires IRQ if sync seen   │◄─FIFO─│  TCP socket management      │
-└─────────────────────────────┘       └─────────────────────────────┘
-              │                                   │
+MAME Instance (emulation thread)       Background thread
+┌─────────────────────────────┐        ┌──────────────────────────────┐
+│  CPU reads/writes C139 RAM  │        │  ASIO io_context             │
+│  comm_tick() fires @ 12MHz  │        │  async_accept / async_read   │
+│  ─ checks FIFOs ───────────►│──FIFO─►│  async_connect / async_write │
+│  ─ fires IRQ if sync seen   │◄─FIFO──│  TCP socket management       │
+└─────────────────────────────┘        └──────────────────────────────┘
+              │                                    │
               │ TCP (one per direction)            │
-              └───────────────────────────────────┘
+              └────────────────────────────────────┘
 ```
 
 Key structural change: ring forwarding is handled **in the ASIO receive callback** directly — when `m_forward=true`, any bytes received are immediately re-queued for transmission without involving the emulation thread.
@@ -376,7 +382,7 @@ Key structural change: ring forwarding is handled **in the ASIO receive callback
 - **REG_6 starts at 0** (not 0x1000) — no hardware floor enforced on reads
 - **sci_de_hack()**: Port assignment function (workaround: DIP switch-based assignment not yet implemented)
 
-**Wire format (SS send_data)**:
+**Wire format (send_data)**:
 ```
 Buffer[0]        = linkid (XOR-hash of remote address)
 Buffer[1]        = tx_size & 0xFF (size low byte)
@@ -386,7 +392,7 @@ Buffer[N*2+1]   |= 0x01 (sync bit set on last byte of last word)
 Buffer[0x1FF]    = 0x01 (frame sentinel)
 ```
 
-**Wire format (SS read_data)**:
+**Wire format (read_data)**:
 ```
 rx_size = buffer[2]<<8 | buffer[1]
 rx_offset = m_reg[REG_6_RXOFFSET]  (starts at 0, accumulates)
@@ -398,7 +404,7 @@ REG_6_RXOFFSET += rx_size (accumulates)
 
 **IRQ firing in mode 0x0C**: The sync bit (buffer's last byte has bit-0 set) causes `REG_0_STATUS |= 0x02`, which `comm_tick()` detects to assert the IRQ.
 
-**sci_int_w() in SS**:
+**sci_int_w()**:
 ```cpp
 void namcos22_state::sci_int_w(int state)
 {
@@ -409,7 +415,7 @@ void namcos22_state::sci_int_w(int state)
 }
 ```
 
-### What SS Improves Over JB
+### What the SailorSat Implementation Improves Over John Bennett's
 
 | Aspect | JB | SS |
 |--------|----|----|
@@ -424,11 +430,11 @@ void namcos22_state::sci_int_w(int state)
 
 ## Comparison and Recommendation
 
-SS is the more mature implementation by a significant margin. It has a cleaner architecture, a proper register model, uses ASIO (which is already in MAME's codebase), and handles forwarding in the network layer rather than the emulation layer.
+SailorSat's is the more mature implementation by a significant margin. It has a cleaner architecture, a proper register model, uses ASIO (which is already in MAME's codebase), and handles forwarding in the network layer rather than the emulation layer.
 
 **However, neither implementation enforces the confirmed hardware floor of REG_6 ≥ 0x1000**, and both have the side-screen rendering defect described below.
 
-**Recommendation**: Use SS as the foundation for any canonical implementation. JB can inform edge cases but should not be the base.
+**Recommendation**: Use the SailorSat implementation as the foundation for any canonical implementation. John Bennett's version can inform edge cases but should not be the base.
 
 ---
 
@@ -441,6 +447,8 @@ Ridge Racer Full Scale (`ridgeracf`) is a 3-screen linked arcade installation. T
 The **center PCB** generates the complete game scene and transmits 242 words of scene state to the two side PCBs every frame. The side PCBs receive this data, use it to render their own perspective of the same scene, and do not transmit anything back.
 
 ## Ring Topology and Data Flow
+
+> **Note**: The physical hardware uses a broadcast Y-split where one wire drives two receivers simultaneously. MAME cannot model this directly — it can only create point-to-point TCP connections between processes. The emulated topology therefore uses a relay chain that approximates the physical broadcast. The behaviour from the game's perspective is identical, but the mechanism differs.
 
 ### Physical Ring (Real Hardware)
 
@@ -472,13 +480,13 @@ Center sends to Right; Right immediately relays to Left (in the ASIO receive cal
 Center CPU                    Right CPU           Left CPU
     │                              │                   │
     │ write scene data to TX RAM   │                   │
-    │ REG_5 = 0x00F2 (242 words)  │                   │
-    │ REG_3 = 0x01 (TX enable)    │                   │
+    │ REG_5 = 0x00F2 (242 words)   │                   │
+    │ REG_3 = 0x01 (TX enable)     │                   │
     │──────── C139 serialises ────►│                   │
     │         (sync bit on last    │──── relayed ─────►│
-    │          word → IRQ)         │     immediately    │
+    │          word → IRQ)         │     immediately   │
     │                              │                   │
-    │                     SCI IRQ ─┤           SCI IRQ ┤
+    │                     SCI IRQ ─┤          SCI IRQ ─┤
     │                              │                   │
     │                    CPU reads RX RAM              │
     │                    (242 words of scene state)    │
@@ -567,14 +575,14 @@ This requires special handling: `slavesim_handle_bb0003()` is called to extract 
 | Method | Location | Description |
 |--------|----------|-------------|
 | `pdp_begin_r()` | `namcos22.cpp` | CPU reads this DSP register to kick the polygon display parser. Sets `m_pdp_render_done=true`, records `m_pdp_frame`, takes polygon RAM snapshot for side screens, runs `pdp_handle_commands()` on SS22. |
-| `sci_int_w(state)` | `namcos22.cpp` | C139 IRQ callback. Relays interrupt to CPU. In current code, **also** sets `m_pdp_render_done=true` for ridgeracf side screens. In SS/JB: only relays IRQ. |
+| `sci_int_w(state)` | `namcos22.cpp` | C139 IRQ callback. Relays the C139 interrupt line to the CPU. |
 | `simulate_slavedsp()` | `namcos22_v.cpp` | Software simulation of the slave DSP. Walks the slave list in polygon RAM from offset 0x02FF, dispatches viewport and geometry commands, submits polygons to the rasteriser queue. |
 | `slavesim_handle_bb0003()` | `namcos22_v.cpp` | Processes a viewport command body: extracts lighting, frustum bounds, and 3×3 view matrix into `m_camera_*` and `m_viewmatrix[][]` members. |
 | `draw_polygons()` | `namcos22_v.cpp` | Called by `screen_update()`. If `m_pdp_render_done && m_slave_simulation_active`, calls `simulate_slavedsp()` then waits for rasteriser. Also handles stale-frame holdover logic. |
 | `screen_update_namcos22()` | `namcos22_v.cpp` | MAME's per-frame video callback. Calls `draw_sprites()`, `draw_polygons()`, `m_poly->render_scene()`, `draw_text_layer()`. |
-| `m_pdp_render_done` | `namcos22.h` | Flag: "polygon data is ready to render this frame." Set by `pdp_begin_r()` (and in current code by `sci_int_w` for side screens). Cleared by `draw_polygons()` after render (held for ridgeracf side screens). |
+| `m_pdp_render_done` | `namcos22.h` | Flag: "polygon data is ready to render this frame." Set by `pdp_begin_r()`. Cleared by `draw_polygons()` after render. |
 | `m_render_refresh` | `namcos22.h` | Controls stale-frame holdover: if current frame > `m_pdp_frame` and refresh is set, allows `m_pdp_render_done` to be cleared. Always cleared at end of `draw_polygons()`. |
-| `m_pdp_frame` | `namcos22.h` | Frame number when the last `pdp_begin_r()` (or sci_int_w for current code) fired. Used by `draw_polygons()` stale-frame logic. |
+| `m_pdp_frame` | `namcos22.h` | Frame number when the last `pdp_begin_r()` fired. Used by `draw_polygons()` stale-frame logic. |
 | `ridgeracf_side_screen()` | `namcos22.cpp` | Returns true if this MAME instance is a ridgeracf side screen (checks `DSW & 0x00030000` for values 0x20000 or 0x30000). |
 
 ### Rendering Pipeline Sequence
@@ -585,32 +593,31 @@ This requires special handling: `slavesim_handle_bb0003()` is called to extract 
 CPU executes game code                       CPU executes game code
     │                                            │
     ▼                                            │
-CPU writes polygon data                    SCI packet arrives in RAM
-    │                                       (242 words → polygon RAM 0x02FF+)
+CPU writes polygon data                      SCI packet arrives in RAM
+    │                                            │ (242 words → polygon RAM 0x02FF+)
     ▼                                            │
-CPU reads pdp_begin_r()  ◄──────────── ─ ─ ─ ─ │ (this is what side screen
-    │                                            │  should do — see §Issues)
-    │ sets m_pdp_render_done=true                │
-    │ sets m_pdp_frame=current_frame             │
-    │                                       C139 IRQ fires (sync bit seen)
-    ▼                                            │
-[Next vblank]                                    ▼
-screen_update() called                      sci_int_w() called
-    │                                            │ (current code only:)
-    ▼                                            │  m_pdp_render_done=true
-draw_polygons()                                  │  m_render_refresh=true
-    │ if (m_pdp_render_done)                     │
-    ▼                                       [Next vblank]
-simulate_slavedsp()                        screen_update() called
-    │ walk slave list                            │
-    │ dispatch geometry                     draw_polygons()
-    ▼                                            │ if (m_pdp_render_done)
-render_scene()                                   ▼
-    │ rasterise & blit                      simulate_slavedsp()
+CPU reads pdp_begin_r()                      C139 IRQ fires (sync bit seen)
+    │                                            │
+    │ sets m_pdp_render_done=true                ▼
+    │ sets m_pdp_frame=current_frame         sci_int_w() called
+    │                                            │ (relays IRQ to CPU only)
     ▼                                            ▼
-Frame displayed                             render_scene()
-                                                 ▼
-                                            Frame displayed
+[Next vblank]                                CPU SCI interrupt service routine
+screen_update() called                           │ processes received data
+    │                                            │   (whether ISR calls pdp_begin_r()
+    ▼                                            │    here is unverified — see Issues)
+draw_polygons()                                  │
+    │ if (m_pdp_render_done)                 [Next vblank — if m_pdp_render_done set]
+    ▼                                           screen_update() called
+simulate_slavedsp()                             │
+    │ walk slave list                        draw_polygons()
+    │ dispatch geometry                         │ if (m_pdp_render_done)
+    ▼                                           ▼
+render_scene()                               simulate_slavedsp()
+    │ rasterise & blit                          ▼
+    ▼                                        render_scene()
+Frame displayed                                 ▼
+                                             Frame displayed
 ```
 
 ## Wire Format Details
@@ -638,10 +645,6 @@ The receiver recovers `m_ram[0x1000 + j] = 0x00XX` for each word — always a 9-
 - Full 512-byte TCP packet per transmission
 - No delta encoding — complete scene state every frame
 
-### Heartbeats
-
-In the current (`mame-latest-rr`) implementation, when the center has no active connections, it emits **"stale-send"** log entries with `sig=ffff count=0`. These are not real heartbeats but debug observations. The SS implementation has no explicit heartbeat — the 60Hz game data stream serves this purpose.
-
 ### What Is Certain vs. What We Invented
 
 | Element | Status | Basis |
@@ -657,17 +660,16 @@ In the current (`mame-latest-rr`) implementation, when the center has no active 
 | TCP socket transport | **Invented** | No alternative for MAME multi-instance |
 | Exact TX condition (reg2==0x03 && reg3==0x00) | **Uncertain** | Approximated from ROM traces |
 | Wire packet format (linkid at 0x1FE, size at 0x1FF) | **Invented** | SS implementation design choice |
-| sci_int_w render trigger | **Invented** | Workaround for clipping issue |
-| Snapshot mechanism | **Invented** | Guards against partially-written slave list |
 
 ---
 
-# Issues with Current Implementations
+# Known Issues with Enhanced Implementations
 
-## Issue 1: Clipped Roads on SS and JB Side Screens
+## Issue 1: Clipped Roads
 
 ### Symptom
-Side screens (left and right) show the road clipping at the center-camera frustum boundary — the scene appears as if viewed from the center camera rather than from the side-camera position.
+
+For both the John Bennett and SailorSat implementation, side screens (left and right) show the road clipping at the center-camera frustum boundary.
 
 ### Root Cause
 
@@ -679,42 +681,30 @@ CPU writes scene data → reads pdp_begin_r() → m_pdp_render_done=true
 → draw_polygons() → simulate_slavedsp() [with correct center viewport]
 ```
 
-On **side screens in SS/JB**, `pdp_begin_r()` fires at the normal point in the CPU's execution cycle — but the **SCI data has not arrived yet**. Polygon RAM at 0x02FF still contains whatever was there previously (often center-camera viewport data). The result:
+On **side screens**, `pdp_begin_r()` fires at the normal point in the CPU's execution cycle — but the **SCI data has not arrived yet**. Polygon RAM at 0x02FF still contains whatever was there previously (often center-camera viewport data). The result:
 ```
 CPU reads pdp_begin_r() [too early — SCI data not yet arrived]
 → m_pdp_render_done=true with CENTER viewport in polygon RAM
 → draw_polygons() → simulate_slavedsp() [clips at center frustum]
 ```
 
-The **current mame-latest-rr** fix sets `m_pdp_render_done=true` inside `sci_int_w()` — which fires **after** the 242-word payload is in polygon RAM, giving the correct side-camera viewport. This produces correct visuals but is architecturally wrong (see Issue 2).
-
 ### Why Identical PCBs Matter
 
-Since all three PCBs run identical ROM code, the side screen CPU **also calls `pdp_begin_r()`**. The correct hardware behaviour is almost certainly that the side screen's **SCI interrupt service routine** processes the received data into polygon RAM and then calls `pdp_begin_r()` — making `pdp_begin_r()` the correct trigger on all screens. The current SS/JB implementation fires `pdp_begin_r()` before the SCI data arrives, so it renders with stale/wrong viewport data.
+Since all three PCBs run identical ROM code, the side screen CPU **also calls `pdp_begin_r()`**. The correct hardware behaviour is almost certainly that the side screen's **SCI interrupt service routine** processes the received data into polygon RAM and then calls `pdp_begin_r()` — making `pdp_begin_r()` the correct trigger on all screens. The current John Bennett and SailorSat implementations fire `pdp_begin_r()` before the SCI data arrives, so it renders with stale/wrong viewport data.
 
-## Issue 2: sci_int_w Render Trigger Is Architecturally Incorrect
+## Issue 2: REG_6 Hardware Floor Not Enforced in SailorSat Implementation
 
-Setting `m_pdp_render_done=true` inside `sci_int_w()` conflates two separate hardware subsystems: the C139 serial interface and the polygon display parser. On real hardware these are independent. The `sci_int_w` callback models one thing only: the C139 asserting its IRQ line to the CPU. The render state should be set by the CPU's response to that IRQ — specifically, when the CPU reads `pdp_begin_r()` after processing the received data.
-
-This is inelegant and fragile — it works because `draw_polygons()` is called on the next `screen_update()`, giving a one-frame window, but it does not model the real hardware causation.
-
-## Issue 3: REG_6 Hardware Floor Not Enforced in SS
-
-SS initialises REG_6 to 0 and `reg_r()` returns the plain register value with no 0x1000 OR. The confirmed hardware constraint (REG_6 ≥ 0x1000) is not enforced. This may cause incorrect RX buffer placement in some scenarios.
-
-## Issue 4: Snapshot Mechanism Never Activates
-
-The polygon RAM snapshot taken at `pdp_begin_r()` time (designed to protect against a partially-written slave list) never activates in practice — the snapshot validity flag (`m_slave_list_snapshot_valid`) is never true. This adds code complexity with no benefit.
+The SailorSat implementation initialises REG_6 to 0 and `reg_r()` returns the plain register value with no 0x1000 OR. The confirmed hardware constraint (REG_6 ≥ 0x1000) is not enforced. This may cause incorrect RX buffer placement in some scenarios.
 
 ---
 
 # Fixes and Next Steps
 
-## Fix 1: Clipping Issue on SS and JB Branches
+## Fix 1: Clipping Issue
 
 ### What to Change
 
-Three additions, all in `namcos22.cpp` / `namcos22.h` of the SS or JB branch:
+Three additions, all in `namcos22.cpp` / `namcos22.h`:
 
 **Step 1 — Add `ridgeracf_side_screen()` helper to `namcos22.h`:**
 ```cpp
@@ -757,7 +747,7 @@ void namcos22_state::sci_int_w(int state)
 }
 ```
 
-`m_pdp_frame`, `m_pdp_render_done`, and `m_render_refresh` all already exist in both SS and JB branches.
+`m_pdp_frame`, `m_pdp_render_done`, and `m_render_refresh` all already exist in both the John Bennett and SailorSat branches.
 
 ### Why This Works
 
@@ -793,9 +783,6 @@ And in `device_reset()`:
 m_reg[REG_6_RXOFFSET] = 0x1000;   // power-on default
 ```
 
-## Fix 3: Remove Snapshot Mechanism (Low Priority)
-
-The snapshot mechanism in `mame-latest-rr` can be removed: `m_slave_list_snapshot`, `m_slave_list_snapshot_valid`, `m_slave_list_last_good`, `m_slave_list_last_good_valid`, and all code paths that populate or consume them. The `pdp_begin_r()` snapshot-capture block and the `reset_parse_state()` snapshot logic can be replaced with always reading from live polygon RAM. This simplifies `simulate_slavedsp()` significantly.
 
 ---
 
@@ -809,56 +796,74 @@ Based on confirmed hardware knowledge, a canonical C139 MAME device should:
 
 2. **Implement mode semantics correctly**: `comm_tick()` evaluates the mode register's bit-field and fires the IRQ callback at the correct condition. Mode 0x0C fires on sync-bit received (REG_0 bit-1 set). Mode 0x09 fires when TXSIZE reaches 0.
 
-3. **Keep ridgeracf-specific logic out of the C139 device**: The device should not contain port-number-based topology detection (`m_mode0c_master`, `m_forward`, `m_mode0c_left_slave`). These are MAME multi-process topology workarounds that belong either in the game driver or as configuration passed in at construction.
+3. **Keep ridgeracf-specific logic out of the C139 device**: The device should not contain port-number-based topology detection. Topology role (center, forwarder, slave) should be configurable at construction time by the game driver.
 
 4. **Use ASIO TCP for transport**: Already in MAME's codebase, works well, proven by SS.
 
 5. **Clean ring forwarding**: The forward flag (does this instance relay received data?) should be settable via a constructor parameter, not inferred from port number matching.
 
-6. **No game-specific render triggers in the device or its callbacks**: `sci_int_w` should relay the CPU interrupt only. Any render state management belongs in the game driver's SCI IRQ handler.
+6. **`sci_int_w` relays the CPU interrupt only**: Any render state management belongs in the game driver's SCI IRQ handler, informed by the ROM ISR trace.
+
+## Target Codebase
+
+The starting point in MAME master is the existing stub at `src/mame/namco/namco_c139.cpp` (113 lines, non-functional). Each phase below replaces stub behaviour with hardware-accurate emulation, verified against the confirmed hardware notes in this document.
 
 ## Implementation Plan
 
-### Phase 1 — Clean Register Model (Low Risk, High Value)
+### Phase 1 — Register Model
 
-Target: `namco_c139.cpp` in `mame-latest-rr` or a new branch from SS.
+Replace the master stub's hardcoded `return 4` with a full 8-register model.
 
-- [ ] Implement all 8 registers with correct masks (already done in SS, verify against hardware notes)
-- [ ] Enforce REG_6 ≥ 0x1000 on reads and at reset
-- [ ] Set power-on defaults: REG_0=0x000C, REG_1=0x000F, REG_6=0x1000
-- [ ] Implement `comm_tick()` mode dispatch table covering modes 0x00–0x0F
-- [ ] Verify mode 0x0C fires IRQ when `REG_0_STATUS & 0x02` (sync bit received)
+- [ ] Add `m_reg[8]` array with correct per-register masks: `{0x0F, 0x0F, 0x03, 0x03, 0xFF, 0xFF, 0x1FFF, 0x1FFF}`
+- [ ] Set power-on defaults in `device_reset()`: REG_0=0x000C, REG_1=0x000F, REG_2–5=0x0000, REG_6=0x1000, REG_7=0x0000
+- [ ] Enforce REG_6 hardware floor: `m_reg[REG_6] = std::max(value, u16(0x1000))` on write; OR 0x1000 on read
+- [ ] Implement `reg_r()` / `reg_w()` dispatching all 8 offsets
+- [ ] Wire up `regs_map` in each System board's address map (System 2, 21, 22, SS22)
+- [ ] Verify against ROM watchpoint traces: ridgera2/raverace init sequence, finallap init sequence
 
-### Phase 2 — Clean Topology Configuration
+### Phase 2 — Networking Infrastructure
 
-- [ ] Remove hardcoded port-number matching from C139 constructor
-- [ ] Add `set_forward(bool)` fluent configuration method — let the game driver or script set this
-- [ ] For ridgeracf: assign forward based on DIP switch identity (center=master+no-forward, right=forward, left=slave) in `namcos22.cpp`, passed to C139 at construction or reset
+Add ASIO TCP transport (modelled on SS, built fresh against master's ASIO API).
 
-### Phase 3 — Fix Rendering on Side Screens
+- [ ] Add ASIO `io_context`, background thread, async TCP acceptor/connector
+- [ ] Add per-instance port configuration via `set_comm_port(u16 local, u16 remote)`
+- [ ] Implement `send_data()`: write TX RAM words as `[lo_byte][0x00]` pairs; append sync bit on last word
+- [ ] Implement `recv_data()`: populate RX RAM from received bytes; accumulate REG_4 and REG_6
+- [ ] Add `comm_tick()` timer at 12MHz: evaluate mode register, fire IRQ callback when condition met
+- [ ] Implement mode 0x0F (no interrupt / config state) and mode 0x0C (IRQ on sync bit received) first — these cover ridgeracf
 
-- [ ] Apply Fix 1 above to SS/JB branches
-- [ ] Perform ROM ISR trace (debugging next step) to determine canonical trigger
-- [ ] Based on trace result: either leave `sci_int_w` fix in place or implement correct `pdp_begin_r()` timing
+### Phase 3 — ridgeracf Support (Mode 0x0C, 3-Screen Topology)
 
-### Phase 4 — Remove Invented Complexity
+- [ ] Add topology role enum: `ROLE_CENTER`, `ROLE_FORWARDER`, `ROLE_SLAVE`
+- [ ] Add `set_role(role_t)` configuration method; call from `namcos22.cpp` based on DIP switch read in `machine_start()`
+- [ ] Center role: transmit 242-word payload each frame; no relay
+- [ ] Forwarder role (right screen): relay received bytes immediately in ASIO callback without involving CPU
+- [ ] Slave role (left screen): receive only; no relay, no transmit
+- [ ] Verify ridgeracf boots and center screen renders correctly with 3 MAME instances
 
-- [ ] Remove snapshot mechanism from `namcos22_v.cpp` (`simulate_slavedsp()`)
-- [ ] Remove `sci_de_hack()` — replace with proper DIP-based port assignment
-- [ ] Consolidate `m_mode0c_master`, `m_forward`, `m_mode0c_left_slave` into a single enum: `ROLE_CENTER`, `ROLE_FORWARD`, `ROLE_SLAVE`
+### Phase 4 — Side-Screen Rendering Fix
 
-### Phase 5 — Generalise for Other Games
+- [ ] Trace the ridgeracf SCI ISR on a side-screen instance (debugger breakpoint on C139 IRQ vector)
+- [ ] **If ISR calls `pdp_begin_r()` after processing data**: the rendering path is already correct — investigate why `pdp_begin_r()` fires before SCI data in SS/JB (likely a MAME emulation ordering issue)
+- [ ] **If ISR does not call `pdp_begin_r()`**: add `ridgeracf_side_screen()` helper to `namcos22.cpp` and update `sci_int_w()` to set `m_pdp_render_done=true` after SCI data is in polygon RAM (see Fix 1 in §Fixes)
+- [ ] Verify left and right screen road geometry clips correctly to the side-camera frustum
 
-The canonical device, once clean, should be testable against other modes:
-- [ ] Verify mode 0x09 fires TX interrupt correctly (Ace Driver, Victory Lap)
-- [ ] Verify mode 0x0D auto-relay behaviour (Final Lap)
-- [ ] Remove `MACHINE_NODEVICE_LAN` from games as they become functional
+### Phase 5 — Additional Game Modes
+
+Once ridgeracf is solid, extend to the other mode groups:
+
+- [ ] Mode 0x09 (TX interrupt on TXSIZE==0, sync bit in TX): Ace Driver, Victory Lap, Cyber Cycles, Armadillo Racing
+- [ ] Mode 0x0D (RX interrupt on sync bit, sync bit in TX, possible auto-relay): Final Lap series, Tokyo Wars, Air Combat, Dirt Dash
+- [ ] Mode 0x08 (TX interrupt, no sync bit): Ridge Racer 2, Rave Racer
+- [ ] Verify each game's init sequence against the ROM watchpoint traces in the hardware notes
+- [ ] Remove `MACHINE_NODEVICE_LAN` from each game as it becomes functional
 
 ### Phase 6 — MAME Mainline Submission
 
-- [ ] Ensure no game-specific code in the device itself
-- [ ] Document all hardware-confirmed behaviours vs. emulation approximations
-- [ ] Submit as incremental PRs: register model first, then networking, then game-specific drivers
+- [ ] No game-specific code anywhere in `namco_c139.cpp` — all game differences expressed via configuration
+- [ ] All hardware-confirmed behaviours documented with source (hardware test, schematic, ROM trace)
+- [ ] All approximated behaviours clearly marked as such (TCP transport, packet format, TX trigger condition)
+- [ ] Submit as incremental PRs: register model first, then networking, then ridgeracf, then other games
 
 ---
 
@@ -877,8 +882,7 @@ The canonical device, once clean, should be testable against other modes:
 | Standard 0x15 viewport format | ✓ | |
 | Extended 0x45/0x22 viewport (flag bits in len) | ✓ (observed) | |
 | TCP socket transport | | ✓ |
-| Exact TX trigger (reg2==0x03 && reg3==0x00) | | ✓ |
+| Exact TX condition (reg2==0x03 && reg3==0x00) | | ✓ |
 | Wire packet format (linkid byte, size bytes) | | ✓ |
-| sci_int_w render trigger for side screens | | ✓ (workaround) |
 | Mode 0x0D auto-relay via REG_7 ≥ 0x1000 | Partial | |
 | Side screen SCI ISR calls pdp_begin_r() | Unverified | |
