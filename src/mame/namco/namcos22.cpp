@@ -1120,47 +1120,19 @@ Notes:
 
 // Main CPU
 
-/* SCI, preliminary!
-
-20020000  2 R/W RX Status
-            0x01 : Frame Error
-            0x02 : Frame Received
-            0x04 : ?
-
-20020002  2 R/W Status/Control Flags
-            0x01 :
-            0x02 : RX flag? (cleared every vsync)
-            0x04 : RX flag? (cleared every vsync)
-            0x08 :
-
-20020004  2 W   FIFO Control Register
-            0x01 : sync bit enable?
-            0x02 : TX FIFO sync bit (bit-8)
-
-20020006  2 W   TX Control Register
-            0x01 : TX start/stop
-            0x02 : ?
-            0x10 : ?
-
-20020008  2 W   -
-2002000a  2 W   TX Frame Size
-2002000c  2 R/W RX FIFO Pointer (0x0000 - 0x0fff)
-2002000e  2 W   TX FIFO Pointer (0x0000 - 0x1fff)
-*/
-u16 namcos22_state::namcos22_sci_r(offs_t offset)
+// C139 SCI IRQ callback — relays the serial controller interrupt to the main CPU.
+// The IRQ line (bit 2 of m_irq_enabled / m_irq_state) corresponds to syscontrol[2].
+void namcos22_state::sci_int_w(int state)
 {
-	switch (offset)
+	const int line = 0x04;
+	if (m_irq_enabled & line)
 	{
-		case 0x0:
-			return 0x0004;
-
-		default:
-			return 0;
+		if (state)
+			m_irq_state |= line;
+		else
+			m_irq_state &= ~line;
+		m_maincpu->set_input_line(m_syscontrol[2] & 7, state ? ASSERT_LINE : CLEAR_LINE);
 	}
-}
-
-void namcos22_state::namcos22_sci_w(offs_t offset, u16 data)
-{
 }
 
 
@@ -1691,38 +1663,14 @@ void namcos22_state::namcos22_am(address_map &map)
 	 *     20010000 - 20011fff  TX Buffer
 	 *     20012000 - 20013fff  RX FIFO Buffer (also used for TX Buffer)
 	 */
-	map(0x20010000, 0x20013fff).ram();
+	map(0x20010000, 0x20013fff).m(m_sci, FUNC(namco_c139_device::data_map));
 
 	/**
 	 * C139 SCI Register
 	 * Mounted position: CPU 4R
-	 *
-	 *     20020000  2  R/W RX Status
-	 *         0x01 : Frame Error
-	 *         0x02 : Frame Received
-	 *         0x04 : ?
-	 *
-	 *     20020002  2  R/W Status/Control Flags
-	 *         0x01 :
-	 *         0x02 : RX flag? (cleared every vsync)
-	 *         0x04 : RX flag? (cleared every vsync)
-	 *         0x08 :
-	 *
-	 *     20020004  2  W   FIFO Control Register
-	 *         0x01 : sync bit enable?
-	 *         0x02 : TX FIFO sync bit (bit-8)
-	 *
-	 *     20020006  2  W   TX Control Register
-	 *         0x01 : TX start/stop
-	 *         0x02 : ?
-	 *         0x10 : ?
-	 *
-	 *     20020008  2  W   -
-	 *     2002000a  2  W   TX Frame Size
-	 *     2002000c  2  R/W RX FIFO Pointer (0x0000 - 0x0fff)
-	 *     2002000e  2  W   TX FIFO Pointer (0x0000 - 0x1fff)
+	 * Register map: see namco_c139.h
 	 */
-	map(0x20020000, 0x2002000f).rw(FUNC(namcos22_state::namcos22_sci_r), FUNC(namcos22_state::namcos22_sci_w));
+	map(0x20020000, 0x2002000f).m(m_sci, FUNC(namco_c139_device::regs_map));
 
 	/**
 	 * System Controller: Interrupt Control, Peripheral Control
@@ -1863,8 +1811,8 @@ void namcos22s_state::namcos22s_am(address_map &map)
 {
 	map(0x000000, 0x3fffff).rom();
 	map(0x400000, 0x40001f).rw(FUNC(namcos22s_state::namcos22_keycus_r), FUNC(namcos22s_state::namcos22_keycus_w));
-	map(0x410000, 0x413fff).ram(); // C139 SCI buffer
-	map(0x420000, 0x42000f).rw(FUNC(namcos22s_state::namcos22_sci_r), FUNC(namcos22s_state::namcos22_sci_w)); // C139 SCI registers
+	map(0x410000, 0x413fff).m(m_sci, FUNC(namco_c139_device::data_map)); // C139 SCI buffer
+	map(0x420000, 0x42000f).m(m_sci, FUNC(namco_c139_device::regs_map)); // C139 SCI registers
 	map(0x430000, 0x430003).w(FUNC(namcos22s_state::namcos22_cpuleds_w));
 	map(0x440000, 0x440003).portr("DSW");
 	map(0x450008, 0x45000b).rw(FUNC(namcos22s_state::namcos22_portbit_r), FUNC(namcos22s_state::namcos22_portbit_w));
@@ -3784,6 +3732,9 @@ void namcos22_state::namcos22(machine_config &config)
 	m_iomcu->set_addrmap(AS_PROGRAM, &namcos22_state::iomcu_s22_program);
 	m_iomcu->p4_in_cb().set(FUNC(namcos22_state::iomcu_port4_s22_r));
 	m_iomcu->set_disable(); // not emulated yet
+
+	NAMCO_C139(config, m_sci, 0U);
+	m_sci->irq_cb().set(FUNC(namcos22_state::sci_int_w));
 
 	EEPROM_2864(config, "eeprom").write_time(attotime::zero);
 
