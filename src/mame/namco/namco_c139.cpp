@@ -173,6 +173,8 @@ public:
 				});
 	}
 
+	void set_role(namco_c139_device::role_t role) { m_role = role; }
+
 	void stop()
 	{
 		m_ioctx.post(
@@ -559,6 +561,22 @@ void namco_c139_device::device_start()
 	save_item(NAME(m_reg));
 	save_item(NAME(m_link_timer));
 	save_item(NAME(m_linkid));
+}
+
+
+//-------------------------------------------------
+//  set_role - topology role configuration
+//  Called by the game driver in machine_reset() (ports are not readable
+//  during machine_start(), so this cannot be called there).
+//  Propagates immediately to the net_context so the relay behaviour is
+//  correct before the link timer expires and networking begins.
+//-------------------------------------------------
+
+void namco_c139_device::set_role(role_t role)
+{
+	m_role = role;
+	if (m_net)
+		m_net->set_role(role);
 }
 
 

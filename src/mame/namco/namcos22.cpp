@@ -3573,6 +3573,23 @@ void namcos22_state::machine_reset()
 	m_dsp_irq_enabled = false;
 
 	m_mcu->set_input_line(INPUT_LINE_RESET, ASSERT_LINE);
+
+	// Configure C139 topology role for ridgeracf (3-screen installation).
+	// Must be done in machine_reset(), not machine_start() — input ports are
+	// not readable during MACHINE_PHASE_INIT.
+	// SW2:1 (bit 16) + SW2:2 (bit 17) identify this PCB in the ring:
+	//   0x00000 = center  (master — originates TX; default role)
+	//   0x20000 = right   (forwarder — relays center data to left screen)
+	//   0x30000 = left    (slave — receive only)
+	if (strcmp(machine().system().name, "ridgeracf") == 0)
+	{
+		const u32 pcb = ioport("DSW")->read() & 0x00030000U;
+		if (pcb == 0x00020000U)
+			m_sci->set_role(namco_c139_device::role_t::FORWARDER);
+		else if (pcb == 0x00030000U)
+			m_sci->set_role(namco_c139_device::role_t::SLAVE);
+		// 0x00000 = center — default role_t::CENTER, no call needed
+	}
 }
 
 // allow save_item on a non-fundamental type
@@ -3667,20 +3684,6 @@ void namcos22_state::machine_start()
 	save_item(NAME(m_pdp_frame));
 	save_item(NAME(m_pdp_base));
 
-	// Configure C139 topology role for ridgeracf (3-screen installation).
-	// SW2:1 (bit 16) + SW2:2 (bit 17) identify this PCB in the ring:
-	//   0x00000 = center  (master — originates TX; default role)
-	//   0x20000 = right   (forwarder — relays center data to left screen)
-	//   0x30000 = left    (slave — receive only)
-	if (strcmp(machine().system().name, "ridgeracf") == 0)
-	{
-		const u32 pcb = ioport("DSW")->read() & 0x00030000U;
-		if (pcb == 0x00020000U)
-			m_sci->set_role(namco_c139_device::role_t::FORWARDER);
-		else if (pcb == 0x00030000U)
-			m_sci->set_role(namco_c139_device::role_t::SLAVE);
-		// 0x00000 = center — default role_t::CENTER, no call needed
-	}
 }
 
 void namcos22s_state::machine_start()

@@ -58,7 +58,7 @@ public:
 	//
 	// ridgeracf ring: Center → Forwarder (right screen) → Slave (left screen)
 	enum class role_t { CENTER, FORWARDER, SLAVE };
-	void set_role(role_t role) { m_role = role; }
+	void set_role(role_t role);  // defined in .cpp — also propagates to net_context
 
 	// Address maps for driver wiring
 	void data_map(address_map &map) ATTR_COLD;   // 0x0000–0x3FFF  (0x2000 words of RAM)
