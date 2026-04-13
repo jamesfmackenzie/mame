@@ -1,0 +1,53 @@
+name: CI (namcos22)
+
+on:
+  push:
+    paths:
+    - '.github/workflows/ci-namcos22.yml'
+    - '3rdparty/**'
+    - 'scripts/**'
+    - 'src/mame/namco/**'
+    - 'makefile'
+  pull_request:
+    paths:
+    - '.github/workflows/ci-namcos22.yml'
+    - '3rdparty/**'
+    - 'scripts/**'
+    - 'src/mame/namco/**'
+    - 'makefile'
+
+permissions:
+  contents: read
+
+jobs:
+  build-namcos22:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@main
+      with:
+        fetch-depth: 0
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang libsdl2-dev libsdl2-ttf-dev libfontconfig-dev libasound2-dev libxinerama-dev libxi-dev qt6-base-dev qt6-base-dev-tools
+    - name: Cache build objects
+      uses: actions/cache@v4
+      with:
+        path: build/
+        key: namcos22-linux-clang-${{ hashFiles('makefile', 'scripts/**') }}-${{ hashFiles('src/mame/namco/**') }}
+        restore-keys: |
+          namcos22-linux-clang-${{ hashFiles('makefile', 'scripts/**') }}-
+          namcos22-linux-clang-
+    - name: Build
+      env:
+        OVERRIDE_CC: clang
+        OVERRIDE_CXX: clang++
+        SUBTARGET: namcos22
+      run: make -j3
+    - name: Validate
+      run: ./namcos22 -validate
+    - uses: actions/upload-artifact@main
+      with:
+        name: namcos22-linux-clang-${{ github.sha }}
+        path: namcos22
+        if-no-files-found: error
