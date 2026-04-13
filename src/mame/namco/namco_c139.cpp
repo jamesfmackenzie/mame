@@ -383,7 +383,11 @@ private:
 							std::error_code e;
 							m_sock_tx.close(e);
 							m_state_tx.store(0);
-							start_connect();
+							m_timeout_tx.expires_after(std::chrono::milliseconds(100));
+							m_timeout_tx.async_wait([this](std::error_code const &te)
+							{
+								if (!te) start_connect();
+							});
 						}
 						else
 						{
@@ -433,6 +437,7 @@ private:
 							{
 								const bool was_empty = (m_fifo_tx.used() == 0);
 								m_fifo_tx.write(&m_buf_rx[0], n);
+								osd_printf_verbose("C139 [%s]: relay %u bytes → TX\n", m_device.tag(), (unsigned)n);
 								if (was_empty)
 									start_send_tx();
 							}
