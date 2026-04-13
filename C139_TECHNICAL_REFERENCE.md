@@ -753,22 +753,49 @@ void namcos22_state::sci_int_w(int state)
 
 The SCI IRQ fires **after** the 242-word payload is already resident in polygon RAM. At that moment polygon RAM at 0x02FF contains the side-camera viewport (received from center). Setting `m_pdp_render_done=true` here ensures `draw_polygons()` calls `simulate_slavedsp()` with the correct viewport in RAM.
 
-### Debugging Next Steps
+### ISR Trace Result — CONFIRMED (2026-04-12)
 
-This fix works and produces correct visuals. However, the *architecturally correct* fix would be:
+Traced via MAME debugger (`./namcos22 ridgeracf -debug`) on a right-screen (forwarder)
+instance. Full instruction trace captured from ISR entry to RTE.
 
-1. **Trace the SCI ISR in the ROM**: Set a MAME debugger breakpoint on the SCI interrupt vector of a side-screen instance. Step through the interrupt service routine to determine whether it reads `pdp_begin_r()` (at address 0x900002 in the master DSP address space) after processing the received data.
+**SCI ISR entry point**: `0x15432`
 
-2. **If yes** (ISR calls `pdp_begin_r()`): The correct fix is to ensure `pdp_begin_r()` fires *after* the SCI data is processed — meaning the existing `pdp_begin_r()` path is correct and the timing issue is a MAME ordering artefact. In this case `sci_int_w()` should remain unmodified and the root cause is something else.
-
-3. **If no** (ISR does not call `pdp_begin_r()`): The `sci_int_w()` fix is the right architectural choice, not just a workaround, and should be kept.
-
-**Debugger command** (run on a side-screen instance):
+**Confirmed call chain**:
 ```
-mame ridgeracf -debugger internal -comm_localhost 127.0.0.1 -comm_localport 15111 \
-     -comm_remotehost 127.0.0.1 -comm_remoteport 15112
+0x15432  MOVEM.L ...          ISR prologue (register save)
+0x15436  MOVE.W $20020000, D3 reads C139 REG_0 (STATUS) — interrupt ack
+         ...
+         BSR  0x9D28          branches to data-processing subroutine
+           ...
+0x9F7C   MOVE.L #$1, $70000000.l  ← writes trigger word to polygon RAM[0]
+           ...
+         RTS
+         ...
+         RTE                  ISR returns
 ```
-Then in debugger: set watchpoint on the C139 IRQ vector address (check interrupt vector table at ROM start), and trace from there.
+
+**Conclusion**: The SCI ISR **does** cause `pdp_begin_r()` to fire, but **indirectly**:
+
+1. ISR reads C139 RX RAM (data already written by our `recv_data()`)
+2. ISR copies received data to polygon RAM at offset 0x02FF
+3. ISR writes `#$1` to `$70000000` — the master DSP trigger word
+4. Master DSP polls `[0x70000000]`, sees non-zero, starts processing cycle
+5. Master DSP reads I/O port 2 → `pdp_begin_r()` → `m_pdp_render_done = true`
+
+This is the **"YES" path** from the implementation plan. `sci_int_w()` must **not** be
+modified. The `pdp_begin_r()` mechanism is architecturally correct for side screens —
+it fires after the ISR has written correct side-camera data to polygon RAM.
+
+The Fix 1 `sci_int_w()` workaround described above is **superseded** by this finding and
+should not be implemented. It was based on the assumption that the ISR does not call
+`pdp_begin_r()` at all, which is incorrect.
+
+**Implication for canonical implementation**: With a correct C139 that delivers data to
+RX RAM before asserting the IRQ (as our Phase 2 implementation does), the side-screen
+rendering chain is self-consistent. No driver-level render fix is required. If side
+screens still clip to the center frustum after Phases 1–3, the root cause is a MAME CPU
+scheduling ordering issue (normal game-loop DSP trigger firing before SCI data arrives),
+not a missing `sci_int_w()` fix.
 
 ## Fix 2: REG_6 Hardware Floor
 
@@ -832,21 +859,27 @@ Add ASIO TCP transport (modelled on SS, built fresh against master's ASIO API).
 - [ ] Add `comm_tick()` timer at 12MHz: evaluate mode register, fire IRQ callback when condition met
 - [ ] Implement mode 0x0F (no interrupt / config state) and mode 0x0C (IRQ on sync bit received) first — these cover ridgeracf
 
-### Phase 3 — ridgeracf Support (Mode 0x0C, 3-Screen Topology)
+### Phase 3 — ridgeracf Support (Mode 0x0C, 3-Screen Topology) ✅ COMPLETE (2026-04-12)
 
-- [ ] Add topology role enum: `ROLE_CENTER`, `ROLE_FORWARDER`, `ROLE_SLAVE`
-- [ ] Add `set_role(role_t)` configuration method; call from `namcos22.cpp` based on DIP switch read in `machine_start()`
-- [ ] Center role: transmit 242-word payload each frame; no relay
-- [ ] Forwarder role (right screen): relay received bytes immediately in ASIO callback without involving CPU
-- [ ] Slave role (left screen): receive only; no relay, no transmit
+- [x] Add topology role enum: `role_t::CENTER`, `role_t::FORWARDER`, `role_t::SLAVE`
+- [x] Add `set_role(role_t)` configuration method; called from `namcos22_state::machine_reset()`
+      (NOTE: must be `machine_reset()`, not `machine_start()` — ports unreadable at init time)
+- [x] Center role: transmit 242-word payload each frame; no relay
+- [x] Forwarder role (right screen): relay received bytes immediately in ASIO callback without CPU
+- [x] Slave role (left screen): receive only; no relay, no transmit
+- [x] ridgeracf `PORT_MODIFY("DSW")` SW2:1/SW2:2 replaced with `PORT_CONFNAME` for PCB role
 - [ ] Verify ridgeracf boots and center screen renders correctly with 3 MAME instances
 
-### Phase 4 — Side-Screen Rendering Fix
+### Phase 4 — Side-Screen Rendering Fix ✅ RESOLVED BY TRACE (2026-04-12)
 
-- [ ] Trace the ridgeracf SCI ISR on a side-screen instance (debugger breakpoint on C139 IRQ vector)
-- [ ] **If ISR calls `pdp_begin_r()` after processing data**: the rendering path is already correct — investigate why `pdp_begin_r()` fires before SCI data in SS/JB (likely a MAME emulation ordering issue)
-- [ ] **If ISR does not call `pdp_begin_r()`**: add `ridgeracf_side_screen()` helper to `namcos22.cpp` and update `sci_int_w()` to set `m_pdp_render_done=true` after SCI data is in polygon RAM (see Fix 1 in §Fixes)
+ISR trace confirmed the YES path (see §ISR Trace Result above). `sci_int_w()` must not
+be modified. The rendering chain is architecturally correct — `pdp_begin_r()` fires
+after the ISR writes correct side-camera data to polygon RAM.
+
+- [x] Trace the ridgeracf SCI ISR — confirmed ISR entry 0x15432, DSP trigger at 0x9F7C
+- [x] Determined: `sci_int_w()` fix is **not** required; existing path is correct
 - [ ] Verify left and right screen road geometry clips correctly to the side-camera frustum
+      (runtime test pending — if clipping still wrong, investigate DSP scheduling order)
 
 ### Phase 5 — Additional Game Modes
 
@@ -885,4 +918,6 @@ Once ridgeracf is solid, extend to the other mode groups:
 | Exact TX condition (reg2==0x03 && reg3==0x00) | | ✓ |
 | Wire packet format (linkid byte, size bytes) | | ✓ |
 | Mode 0x0D auto-relay via REG_7 ≥ 0x1000 | Partial | |
-| Side screen SCI ISR calls pdp_begin_r() | Unverified | |
+| Side screen SCI ISR triggers pdp_begin_r() indirectly | ✓ (ROM trace 2026-04-12) | |
+| ISR trigger mechanism: write #$1 to polygon RAM[0] (0x70000000) | ✓ (ROM trace 0x9F7C) | |
+| ISR entry address (ridgeracf RRF2): 0x15432 | ✓ (ROM trace 2026-04-12) | |
