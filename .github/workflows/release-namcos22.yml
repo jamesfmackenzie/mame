@@ -99,10 +99,10 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
+        gh release delete "${{ github.event.inputs.tag }}" --yes 2>/dev/null || true
         gh release create "${{ github.event.inputs.tag }}" \
           --title "${{ github.event.inputs.tag }}" \
           --notes "namcos22 binaries built from branch \`${{ github.ref_name }}\` at \`${{ github.sha }}\`." \
-          --clobber \
           artifacts/namcos22-linux/namcos22 \
           artifacts/namcos22-macos/namcos22 \
           artifacts/namcos22-windows/namcos22.exe
