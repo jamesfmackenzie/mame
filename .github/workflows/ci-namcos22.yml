@@ -43,6 +43,7 @@ jobs:
         OVERRIDE_CC: clang
         OVERRIDE_CXX: clang++
         SUBTARGET: namcos22
+        SOURCEFILTER: src/mame/namcos22.flt
       run: make -j3
     - name: Validate
       run: ./namcos22 -validate
