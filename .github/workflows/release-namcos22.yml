@@ -102,6 +102,7 @@ jobs:
         gh release create "${{ github.event.inputs.tag }}" \
           --title "${{ github.event.inputs.tag }}" \
           --notes "namcos22 binaries built from branch \`${{ github.ref_name }}\` at \`${{ github.sha }}\`." \
+          --clobber \
           artifacts/namcos22-linux/namcos22 \
           artifacts/namcos22-macos/namcos22 \
           artifacts/namcos22-windows/namcos22.exe
