@@ -75,10 +75,7 @@ jobs:
     - name: Build (Windows)
       if: matrix.os == 'windows-latest'
       shell: msys2 {0}
-      env:
-        SUBTARGET: namcos22
-        SOURCEFILTER: src/mame/namcos22.flt
-      run: make -j3
+      run: make -j3 SUBTARGET=namcos22 SOURCEFILTER=src/mame/namcos22.flt
 
     - name: Upload binary
       uses: actions/upload-artifact@main
@@ -105,6 +102,6 @@ jobs:
         gh release create "${{ github.event.inputs.tag }}" \
           --title "${{ github.event.inputs.tag }}" \
           --notes "namcos22 binaries built from branch \`${{ github.ref_name }}\` at \`${{ github.sha }}\`." \
-          "artifacts/namcos22-linux/namcos22#namcos22-linux" \
-          "artifacts/namcos22-macos/namcos22#namcos22-macos" \
-          "artifacts/namcos22-windows/namcos22.exe#namcos22-windows.exe"
+          artifacts/namcos22-linux/namcos22 \
+          artifacts/namcos22-macos/namcos22 \
+          artifacts/namcos22-windows/namcos22.exe
