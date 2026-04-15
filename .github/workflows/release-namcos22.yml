@@ -95,6 +95,11 @@ jobs:
       with:
         path: artifacts/
 
+    - name: Rename binaries for release
+      run: |
+        mv artifacts/namcos22-linux/namcos22 artifacts/namcos22-linux/namcos22-linux
+        mv artifacts/namcos22-macos/namcos22 artifacts/namcos22-macos/namcos22-macos
+
     - name: Create GitHub release
       env:
         GH_TOKEN: ${{ github.token }}
@@ -103,6 +108,6 @@ jobs:
         gh release create "${{ github.event.inputs.tag }}" \
           --title "${{ github.event.inputs.tag }}" \
           --notes "namcos22 binaries built from branch \`${{ github.ref_name }}\` at \`${{ github.sha }}\`." \
-          artifacts/namcos22-linux/namcos22 \
-          artifacts/namcos22-macos/namcos22 \
+          artifacts/namcos22-linux/namcos22-linux \
+          artifacts/namcos22-macos/namcos22-macos \
           artifacts/namcos22-windows/namcos22.exe
