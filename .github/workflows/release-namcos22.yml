@@ -92,8 +92,13 @@ jobs:
       if: matrix.os == 'windows-latest'
       shell: msys2 {0}
       run: |
-        ldd namcos22.exe | grep '/mingw64/' | awk '{print $3}' | xargs -I{} cp {} .
-        zip namcos22-windows.zip namcos22.exe *.dll
+        echo "=== ldd output ==="
+        ldd namcos22.exe
+        echo "=== copying mingw64 DLLs ==="
+        ldd namcos22.exe | grep '/mingw64/' | awk '{print $3}' | xargs -r cp -t . || true
+        ls *.dll 2>/dev/null || echo "No DLLs found"
+        zip namcos22-windows.zip namcos22.exe
+        find . -maxdepth 1 -name '*.dll' -exec zip namcos22-windows.zip {} +
 
     - name: Upload binary
       uses: actions/upload-artifact@main
