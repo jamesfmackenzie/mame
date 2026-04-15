@@ -18,13 +18,13 @@ jobs:
         include:
           - os: ubuntu-latest
             name: linux
-            binary: namcos22
+            binary: namcos22-linux.zip
           - os: macos-latest
             name: macos
             binary: namcos22-macos.zip
           - os: windows-latest
             name: windows
-            binary: namcos22.exe
+            binary: namcos22-windows.zip
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@main
@@ -64,6 +64,10 @@ jobs:
         SOURCEFILTER: src/mame/namcos22.flt
       run: make -j3
 
+    - name: Bundle binary (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: zip namcos22-linux.zip namcos22
+
     - name: Build (macOS)
       if: matrix.os == 'macos-latest'
       env:
@@ -84,6 +88,13 @@ jobs:
       shell: msys2 {0}
       run: make -j3 SUBTARGET=namcos22 SOURCEFILTER=src/mame/namcos22.flt
 
+    - name: Bundle DLLs (Windows)
+      if: matrix.os == 'windows-latest'
+      shell: msys2 {0}
+      run: |
+        ldd namcos22.exe | grep '/mingw64/' | awk '{print $3}' | xargs -I{} cp {} .
+        zip namcos22-windows.zip namcos22.exe *.dll
+
     - name: Upload binary
       uses: actions/upload-artifact@main
       with:
@@ -102,9 +113,6 @@ jobs:
       with:
         path: artifacts/
 
-    - name: Rename linux binary for release
-      run: mv artifacts/namcos22-linux/namcos22 artifacts/namcos22-linux/namcos22-linux
-
     - name: Create GitHub release
       env:
         GH_TOKEN: ${{ github.token }}
@@ -113,6 +121,6 @@ jobs:
         gh release create "${{ github.event.inputs.tag }}" \
           --title "${{ github.event.inputs.tag }}" \
           --notes "namcos22 binaries built from branch \`${{ github.ref_name }}\` at \`${{ github.sha }}\`." \
-          artifacts/namcos22-linux/namcos22-linux \
+          artifacts/namcos22-linux/namcos22-linux.zip \
           artifacts/namcos22-macos/namcos22-macos.zip \
-          artifacts/namcos22-windows/namcos22.exe
+          artifacts/namcos22-windows/namcos22-windows.zip
