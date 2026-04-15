@@ -21,7 +21,7 @@ jobs:
             binary: namcos22
           - os: macos-latest
             name: macos
-            binary: namcos22
+            binary: namcos22-macos.zip
           - os: windows-latest
             name: windows
             binary: namcos22.exe
@@ -39,7 +39,7 @@ jobs:
 
     - name: Install dependencies (macOS)
       if: matrix.os == 'macos-latest'
-      run: brew install python3 sdl3
+      run: brew install python3 sdl3 dylibbundler
 
     - name: Set up MSYS2 (Windows)
       if: matrix.os == 'windows-latest'
@@ -72,6 +72,13 @@ jobs:
         SOURCEFILTER: src/mame/namcos22.flt
       run: make -j3
 
+    - name: Bundle dylibs (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        mkdir -p libs
+        dylibbundler -od -b -x namcos22 -d libs/ -p @executable_path/libs/
+        zip -r namcos22-macos.zip namcos22 libs/
+
     - name: Build (Windows)
       if: matrix.os == 'windows-latest'
       shell: msys2 {0}
@@ -95,10 +102,8 @@ jobs:
       with:
         path: artifacts/
 
-    - name: Rename binaries for release
-      run: |
-        mv artifacts/namcos22-linux/namcos22 artifacts/namcos22-linux/namcos22-linux
-        mv artifacts/namcos22-macos/namcos22 artifacts/namcos22-macos/namcos22-macos
+    - name: Rename linux binary for release
+      run: mv artifacts/namcos22-linux/namcos22 artifacts/namcos22-linux/namcos22-linux
 
     - name: Create GitHub release
       env:
@@ -109,5 +114,5 @@ jobs:
           --title "${{ github.event.inputs.tag }}" \
           --notes "namcos22 binaries built from branch \`${{ github.ref_name }}\` at \`${{ github.sha }}\`." \
           artifacts/namcos22-linux/namcos22-linux \
-          artifacts/namcos22-macos/namcos22-macos \
+          artifacts/namcos22-macos/namcos22-macos.zip \
           artifacts/namcos22-windows/namcos22.exe
