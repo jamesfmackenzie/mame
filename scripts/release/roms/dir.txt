@@ -1,0 +1,6 @@
+Place your ROM files in this directory.
+
+Required ROM set for Ridge Racer Full Scale (3-screen):
+  ridgeracf   Ridge Racer Full Scale
+
+ROMs are not included and must be obtained separately.
