@@ -69,9 +69,10 @@ jobs:
       if: matrix.os == 'ubuntu-latest'
       run: |
         cp scripts/release/ridgeracf-3screen.sh ridgeracf-3screen.sh
+        cp scripts/release/readme.txt readme.txt
         chmod +x ridgeracf-3screen.sh
-        cp -r scripts/release/roms roms
-        zip -r namcos22-linux.zip namcos22 ridgeracf-3screen.sh roms/
+        mkdir -p roms && cp scripts/release/roms/dir.txt roms/
+        zip -r namcos22-linux.zip namcos22 ridgeracf-3screen.sh readme.txt roms/
 
     - name: Build (macOS)
       if: matrix.os == 'macos-latest'
@@ -87,9 +88,10 @@ jobs:
         mkdir -p libs
         dylibbundler -od -b -x namcos22 -d libs/ -p @executable_path/libs/
         cp scripts/release/ridgeracf-3screen.sh ridgeracf-3screen.sh
+        cp scripts/release/readme.txt readme.txt
         chmod +x ridgeracf-3screen.sh
-        cp -r scripts/release/roms roms
-        zip -r namcos22-macos.zip namcos22 libs/ ridgeracf-3screen.sh roms/
+        mkdir -p roms && cp scripts/release/roms/dir.txt roms/
+        zip -r namcos22-macos.zip namcos22 libs/ ridgeracf-3screen.sh readme.txt roms/
 
     - name: Build (Windows)
       if: matrix.os == 'windows-latest'
@@ -101,8 +103,9 @@ jobs:
       shell: msys2 {0}
       run: |
         cp scripts/release/ridgeracf-3screen.bat ridgeracf-3screen.bat
-        cp -r scripts/release/roms roms
-        zip -r namcos22-windows.zip namcos22.exe ridgeracf-3screen.bat roms/
+        cp scripts/release/readme.txt readme.txt
+        mkdir -p roms && cp scripts/release/roms/dir.txt roms/
+        zip -r namcos22-windows.zip namcos22.exe ridgeracf-3screen.bat readme.txt roms/
 
     - name: Upload binary
       uses: actions/upload-artifact@main
