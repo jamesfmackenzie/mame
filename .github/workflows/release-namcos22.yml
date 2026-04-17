@@ -67,7 +67,11 @@ jobs:
 
     - name: Bundle binary (Linux)
       if: matrix.os == 'ubuntu-latest'
-      run: zip namcos22-linux.zip namcos22
+      run: |
+        cp scripts/release/ridgeracf-3screen.sh ridgeracf-3screen.sh
+        chmod +x ridgeracf-3screen.sh
+        cp -r scripts/release/roms roms
+        zip -r namcos22-linux.zip namcos22 ridgeracf-3screen.sh roms/
 
     - name: Build (macOS)
       if: matrix.os == 'macos-latest'
@@ -82,7 +86,10 @@ jobs:
       run: |
         mkdir -p libs
         dylibbundler -od -b -x namcos22 -d libs/ -p @executable_path/libs/
-        zip -r namcos22-macos.zip namcos22 libs/
+        cp scripts/release/ridgeracf-3screen.sh ridgeracf-3screen.sh
+        chmod +x ridgeracf-3screen.sh
+        cp -r scripts/release/roms roms
+        zip -r namcos22-macos.zip namcos22 libs/ ridgeracf-3screen.sh roms/
 
     - name: Build (Windows)
       if: matrix.os == 'windows-latest'
@@ -92,7 +99,10 @@ jobs:
     - name: Bundle binary (Windows)
       if: matrix.os == 'windows-latest'
       shell: msys2 {0}
-      run: zip namcos22-windows.zip namcos22.exe
+      run: |
+        cp scripts/release/ridgeracf-3screen.bat ridgeracf-3screen.bat
+        cp -r scripts/release/roms roms
+        zip -r namcos22-windows.zip namcos22.exe ridgeracf-3screen.bat roms/
 
     - name: Upload binary
       uses: actions/upload-artifact@main
