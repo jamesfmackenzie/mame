@@ -118,13 +118,13 @@ echo "Launching LEFT (slave, port ${LEFT_LOCAL})..."
 launch left "$LEFT_LOCAL" "$LEFT_REMOTE"
 wait_for_listener "$LOG_DIR/left.log" "left"
 
-echo "Launching CENTER (master, port ${CENTER_LOCAL})..."
-launch center "$CENTER_LOCAL" "$CENTER_REMOTE"
-wait_for_listener "$LOG_DIR/center.log" "center"
-
 echo "Launching RIGHT (forwarder, port ${RIGHT_LOCAL})..."
 launch right "$RIGHT_LOCAL" "$RIGHT_REMOTE" ${EXTRA_RIGHT[@]+"${EXTRA_RIGHT[@]}"}
 wait_for_listener "$LOG_DIR/right.log" "right"
+
+echo "Launching CENTER (master, port ${CENTER_LOCAL})..."
+launch center "$CENTER_LOCAL" "$CENTER_REMOTE"
+wait_for_listener "$LOG_DIR/center.log" "center"
 
 echo ""
 echo "All instances running. Ctrl+C to stop all."
