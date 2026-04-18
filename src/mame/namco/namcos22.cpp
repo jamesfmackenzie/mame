@@ -3012,11 +3012,12 @@ static INPUT_PORTS_START( ridgeracf )
 	// SW2:1 (bit 16) and SW2:2 (bit 17) encode the PCB identity for the 3-screen installation.
 	// Each of the three identical boards is configured by the operator via these switches.
 	// The center board generates and transmits scene data; right relays to left; left receives only.
+	// Exact DIP encoding unverified on real hardware — assumed consistent with ridgerac3m.
 	PORT_MODIFY("DSW")
-	PORT_CONFNAME( 0x00030000, 0x00000000, "PCB Role (3-Screen)" )
-	PORT_CONFSETTING(          0x00000000, "Center (master — generates and TX scene data)" )
-	PORT_CONFSETTING(          0x00020000, "Right Screen (forwarder — relays to left)" )
-	PORT_CONFSETTING(          0x00030000, "Left Screen (slave — receive only)" )
+	PORT_DIPNAME( 0x00030000, 0x00010000, "PCB Role (3-Screen)" ) PORT_DIPLOCATION("SW2:1,2")
+	PORT_DIPSETTING(          0x00010000, "Center (master — generates and TX scene data)" )
+	PORT_DIPSETTING(          0x00020000, "Left Screen (slave — receive only)" )
+	PORT_DIPSETTING(          0x00030000, "Right Screen (forwarder — relays to left)" )
 	PORT_DIPNAME( 0x80000000, 0x80000000, "Test Mode 2" ) PORT_DIPLOCATION("SW3:8")
 	PORT_DIPSETTING(          0x80000000, DEF_STR( Off ) )
 	PORT_DIPSETTING(          0x00000000, DEF_STR( On ) )
@@ -3585,21 +3586,24 @@ void namcos22_state::machine_reset()
 
 	m_mcu->set_input_line(INPUT_LINE_RESET, ASSERT_LINE);
 
-	// Configure C139 topology role for ridgeracf (3-screen installation).
+	// Configure C139 topology role for 3-screen installations (ridgeracf, ridgerac3m).
 	// Must be done in machine_reset(), not machine_start() — input ports are
 	// not readable during MACHINE_PHASE_INIT.
 	// SW2:1 (bit 16) + SW2:2 (bit 17) identify this PCB in the ring:
-	//   0x00000 = center  (master — originates TX; default role)
-	//   0x20000 = right   (forwarder — relays center data to left screen)
-	//   0x30000 = left    (slave — receive only)
-	if (strcmp(machine().system().name, "ridgeracf") == 0)
+	//   0x10000 = center  (master — originates TX; default role)
+	//   0x20000 = left    (slave — receive only)
+	//   0x30000 = right   (forwarder — relays center data to left screen)
+	// ridgeracf encoding unverified on real hardware — assumed consistent with ridgerac3m.
+	const bool is_3screen = (strcmp(machine().system().name, "ridgeracf")  == 0 ||
+	                         strcmp(machine().system().name, "ridgerac3m") == 0);
+	if (is_3screen)
 	{
 		const u32 pcb = ioport("DSW")->read() & 0x00030000U;
 		if (pcb == 0x00020000U)
-			m_sci->set_role(namco_c139_device::role_t::FORWARDER);
-		else if (pcb == 0x00030000U)
 			m_sci->set_role(namco_c139_device::role_t::SLAVE);
-		// 0x00000 = center — default role_t::CENTER, no call needed
+		else if (pcb == 0x00030000U)
+			m_sci->set_role(namco_c139_device::role_t::FORWARDER);
+		// 0x10000 = center — default role_t::CENTER, no call needed
 	}
 }
 
