@@ -17,13 +17,13 @@ REM                                  the next opens
 
 setlocal
 
-set BINARY=namcos22.exe
+set BINARY=mamenamcos22.exe
 set GAME=ridgeracf
 set MODE=%1
 
 if not exist %BINARY% (
     echo Error: %BINARY% not found.
-    echo This script must be run from the same directory as namcos22.exe
+    echo This script must be run from the same directory as mamenamcos22.exe
     pause
     exit /b 1
 )

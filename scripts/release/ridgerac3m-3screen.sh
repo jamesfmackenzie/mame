@@ -1,27 +1,35 @@
 #!/usr/bin/env bash
-# ridgeracf-3screen.sh
+# ridgerac3m-3screen.sh
 #
-# Launch three ridgeracf instances for 3-screen play.
+# Launch three ridgerac3m instances for 3-screen play.
+#
+# Ridge Racer (Three Monitor Version, RRC) — requires C139 link-up across 3 PCBs.
+# PCB role is selected via DIP switches SW2:1 and SW2:2 (not CONF settings).
 #
 # Ring topology:
 #
 #   Center (master)      Right (forwarder)    Left (slave)
-#   localport  15112     localport  15113     localport  15111
-#   remoteport 15113 --> remoteport 15111 --> remoteport 15112
+#   localport  15122     localport  15123     localport  15121
+#   remoteport 15123 --> remoteport 15121 --> remoteport 15122
+#
+# DIP switch settings (SW2:1, SW2:2):
+#   Center/Main (PCB 2):  SW2:1=OFF, SW2:2=OFF
+#   Left        (PCB 1):  SW2:1=OFF, SW2:2=ON
+#   Right       (PCB 3):  SW2:1=ON,  SW2:2=ON
 #
 # Usage:
-#   ./ridgeracf-3screen.sh            normal run (all 3 instances)
-#   ./ridgeracf-3screen.sh setup      first-run: opens one window at a time so
-#                                     you can set the PCB Role in each before
-#                                     the next opens
-#   ./ridgeracf-3screen.sh verbose    all instances get -verbose (network output in logs)
+#   ./ridgerac3m-3screen.sh            normal run (all 3 instances)
+#   ./ridgerac3m-3screen.sh setup      first-run: opens one window at a time so
+#                                      you can set the DIP switches in each before
+#                                      the next opens
+#   ./ridgerac3m-3screen.sh verbose    all instances get -verbose (network output in logs)
 
 set -euo pipefail
 
 # Detect binary name (macOS and Linux both produce 'namcos22')
 BINARY=./mamenamcos22
 
-GAME=ridgeracf
+GAME=ridgerac3m
 LOG_DIR=multiplay/logs
 MODE="${1:-run}"
 
@@ -43,9 +51,9 @@ mkdir -p multiplay/center multiplay/right multiplay/left "$LOG_DIR"
 
 # ---- port assignments -----------------------------------------------------
 
-CENTER_LOCAL=15112;  CENTER_REMOTE=15113
-RIGHT_LOCAL=15113;   RIGHT_REMOTE=15111
-LEFT_LOCAL=15111;    LEFT_REMOTE=15112
+CENTER_LOCAL=15122;  CENTER_REMOTE=15123
+RIGHT_LOCAL=15123;   RIGHT_REMOTE=15121
+LEFT_LOCAL=15121;    LEFT_REMOTE=15122
 
 # ---- window size ----------------------------------------------------------
 
@@ -102,33 +110,33 @@ FIRST-RUN SETUP
 ---------------
 Each window will open one at a time. In each one:
   1. Press Tab to open the MAME menu
-  2. Go to Machine Configuration
-  3. Set "PCB Role (3-Screen)" to the value shown below
+  2. Go to DIP Switches
+  3. Set SW2:1 and SW2:2 to the values shown below
   4. Close the window to continue to the next
 
 MSG
 
     echo "--- Opening CENTER window ---"
-    echo "    Set PCB Role -> 'Center (master)'"
+    echo "    Set SW2:1=OFF, SW2:2=OFF  ->  Center/Main (PCB 2)"
     launch center "$CENTER_LOCAL" "$CENTER_REMOTE"
     wait "${PIDS[${#PIDS[@]}-1]}"
     echo "Center config saved."
     echo ""
 
     echo "--- Opening RIGHT SCREEN window ---"
-    echo "    Set PCB Role -> 'Right Screen (forwarder)'"
+    echo "    Set SW2:1=ON,  SW2:2=ON   ->  Right (PCB 3)"
     launch right "$RIGHT_LOCAL" "$RIGHT_REMOTE"
     wait "${PIDS[${#PIDS[@]}-1]}"
     echo "Right screen config saved."
     echo ""
 
     echo "--- Opening LEFT SCREEN window ---"
-    echo "    Set PCB Role -> 'Left Screen (slave)'"
+    echo "    Set SW2:1=OFF, SW2:2=ON   ->  Left (PCB 1)"
     launch left "$LEFT_LOCAL" "$LEFT_REMOTE"
     wait "${PIDS[${#PIDS[@]}-1]}"
     echo "Left screen config saved."
     echo ""
-    echo "Setup complete. Run ./ridgeracf-3screen.sh to start all three."
+    echo "Setup complete. Run ./ridgerac3m-3screen.sh to start all three."
     exit 0
 fi
 
@@ -146,7 +154,7 @@ fi
 rm -f "$LOG_DIR"/*.log
 
 cat <<MSG
-Starting ridgeracf 3-screen
+Starting ridgerac3m 3-screen (Ridge Racer Three Monitor Version)
   Physical layout:  [ LEFT ] [ CENTER ] [ RIGHT ]
 
 MSG

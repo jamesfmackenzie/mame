@@ -3,7 +3,7 @@ Ridge Racer Full Scale - 3-Screen Setup
 
 CONTENTS
 --------
-  namcos22 / namcos22.exe   MAME emulator (namcos22 subtarget)
+  mamenamcos22 / mamenamcos22.exe   MAME emulator (namcos22 subtarget)
   ridgeracf-3screen.sh      Triple-screen launcher (Linux / macOS)
   ridgeracf-3screen.bat     Triple-screen launcher (Windows)
   roms/                     Place your ROM files here
@@ -84,5 +84,5 @@ TROUBLESHOOTING
     Check PCB Role settings — each screen must have a unique role.
     Re-run setup mode if needed.
 
-  macOS: "namcos22 cannot be opened because it is from an unidentified developer"
-    Right-click namcos22 -> Open -> Open (first time only).
+  macOS: "mamenamcos22 cannot be opened because it is from an unidentified developer"
+    Right-click mamenamcos22 -> Open -> Open (first time only).
