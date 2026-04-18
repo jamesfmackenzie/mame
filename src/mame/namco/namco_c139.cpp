@@ -64,7 +64,7 @@ constexpr int REG_2_CONTROL  = 2;   // TX control / sync handshake
 constexpr int REG_3_START    = 3;   // TX enable; bit-1 = 2 Mbps speed select
 constexpr int REG_4_RXSIZE   = 4;   // received word count
 constexpr int REG_5_TXSIZE   = 5;   // transmit word count (chip clears to 0 on TX complete)
-constexpr int REG_6_RXOFFSET = 6;   // RX buffer write pointer — hardware minimum 0x1000
+constexpr int REG_6_RXOFFSET = 6;   // RX fill count (= REG_4); reg_r ORs 0x1000 → past-the-end addr
 constexpr int REG_7_TXOFFSET = 7;   // TX buffer read pointer
 
 // Hardware masks — values above the mask are discarded on write
@@ -75,7 +75,7 @@ constexpr uint16_t REG_MASKS[8] = {
 	0x0003,  // REG_3 START:     bits 1:0
 	0x00ff,  // REG_4 RXSIZE:    8-bit
 	0x00ff,  // REG_5 TXSIZE:    8-bit
-	0x1fff,  // REG_6 RXOFFSET:  13-bit, enforced minimum 0x1000
+	0x1fff,  // REG_6 RXOFFSET:  13-bit (stores rx_size; reg_r returns value | 0x1000)
 	0x1fff   // REG_7 TXOFFSET:  13-bit
 };
 
@@ -790,20 +790,14 @@ void namco_c139_device::recv_data()
 
 	const unsigned rx_size = uint16_t(m_buffer[2]) << 8 | m_buffer[1];
 
-	// When advancing REG_6 by rx_size would overflow the 13-bit RAM space, reset the
-	// write pointer to the start of the RX area (0x1000) so the frame is written there
-	// and REG_6 = 0x1000 + rx_size.  This prevents the floor-induced discontinuity where
-	// the game computes start = (floor(overflow) - rx_size) and lands in the TX area.
-	const unsigned rx_offset = (m_reg[REG_6_RXOFFSET] + rx_size > 0x1fffu)
-		? 0x1000u : unsigned(m_reg[REG_6_RXOFFSET]);
+	LOG("C139: recv rx_size=%02x\n", rx_size);
 
-	LOG("C139: recv rx_size=%02x rx_offset=%04x\n", rx_size, rx_offset);
-
-	// write received words into the RX area of RAM (no wrapping needed: overflow reset above)
+	// Received data is always written to the fixed base of the RX area (0x1000).
+	// Each frame overwrites the previous — there is no ring buffer.
 	for (unsigned j = 0; j < rx_size; j++)
 	{
 		const unsigned buf = 3 + j * 2;
-		m_ram[rx_offset + j] = uint16_t(m_buffer[buf + 1]) << 8 | m_buffer[buf];
+		m_ram[0x1000 + j] = uint16_t(m_buffer[buf + 1]) << 8 | m_buffer[buf];
 	}
 
 	// sync bit is signalled by bit-0 of the second byte of the last payload word
@@ -812,10 +806,11 @@ void namco_c139_device::recv_data()
 		(rx_size > 0 && (m_buffer[3 + (rx_size - 1) * 2 + 1] & 0x01)) ||
 		(m_buffer[FRAME_SIZE - 1] & 0x01);
 
-	// REG_4: size of the most-recently received frame.
-	// REG_6: advanced to end of written region; game computes start = REG_6 - REG_4.
+	// REG_4 and REG_6 both hold rx_size.  reg_r ORs REG_6 with 0x1000 on read,
+	// so the game sees REG_6 = 0x1000 + rx_size — the past-the-end address of
+	// the just-written data.  Data is at 0x1000 .. (REG_6_read - 1).
 	m_reg[REG_4_RXSIZE]   = rx_size & REG_MASKS[REG_4_RXSIZE];
-	m_reg[REG_6_RXOFFSET] = uint16_t(rx_offset + rx_size) & REG_MASKS[REG_6_RXOFFSET];
+	m_reg[REG_6_RXOFFSET] = rx_size & REG_MASKS[REG_6_RXOFFSET];
 
 	// RXREADY clears while there is data to consume (RXSIZE > 0)
 	if (m_reg[REG_4_RXSIZE] > 0)
