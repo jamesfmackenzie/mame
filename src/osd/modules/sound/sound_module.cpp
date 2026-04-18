@@ -35,7 +35,7 @@ void sound_module::abuffer::set_latency(float latency)
 
 void sound_module::abuffer::clear()
 {
-	get(m_last_sample.data(), 1);
+	get(m_last_sample.data(), 1, false);
 	m_used_buffers = 0;
 	m_used_buffers_prev = 0;
 	m_overrun = false;
@@ -58,7 +58,7 @@ void sound_module::abuffer::get(int16_t *data, uint32_t samples, bool internal) 
 			m_delta2 += samples - pos;
 			m_underruns++;
 			while(pos != samples) {
-				std::memmove(data, m_last_sample.data(), m_channels);
+				std::memmove(data, m_last_sample.data(), m_channels * sizeof(int16_t));
 				data += m_channels;
 				pos++;
 			}
@@ -115,7 +115,7 @@ void sound_module::abuffer::flush_buffers(uint32_t remain)
 		m_used_buffers = remain;
 	}
 
-	if (!m_used_buffers || samples > (m_buffers[0].data.size() / m_channels - m_buffers[0].cpos))
+	if(!m_used_buffers || samples > (m_buffers[0].data.size() / m_channels - m_buffers[0].cpos))
 		return;
 	int16_t *dest = &m_buffers[0].data[m_channels * m_buffers[0].cpos];
 

@@ -27,7 +27,6 @@
 
 # NO_OPENGL = 0
 # USE_DISPATCH_GL = 0
-# MODERN_WIN_API = 0
 # USE_SDL = 1
 # SDL_INI_PATH = .;$HOME/.mame/;ini;
 # SDL2_MULTIAPI = 1
@@ -149,6 +148,8 @@ ifeq ($(MSYSTEM),MINGW32)
 PLATFORM := x86
 else ifeq ($(MSYSTEM),MINGW64)
 PLATFORM := x86
+else ifeq ($(MSYSTEM),UCRT64)
+PLATFORM := x86
 else ifeq ($(MSYSTEM),CLANG64)
 PLATFORM := x86
 else ifeq ($(MSYSTEM),CLANGARM64)
@@ -242,6 +243,8 @@ ifeq ($(MSYSTEM),MINGW32)
 	MINGW32 := $(MINGW_PREFIX)
 else ifeq ($(MSYSTEM),MINGW64)
 	MINGW64 := $(MINGW_PREFIX)
+else ifeq ($(MSYSTEM),UCRT64)
+	MINGW64 := $(MINGW_PREFIX)
 else ifeq ($(MSYSTEM),CLANG64)
 	MINGW64 := $(MINGW_PREFIX)
 else ifeq ($(MSYSTEM),CLANGARM64)
@@ -314,6 +317,8 @@ TARGETOS := windows
 ifeq ($(MSYSTEM),MINGW32)
 ARCHITECTURE = _x86
 else ifeq ($(MSYSTEM),MINGW64)
+ARCHITECTURE := _x64
+else ifeq ($(MSYSTEM),UCRT64)
 ARCHITECTURE := _x64
 else ifeq ($(MSYSTEM),CLANG64)
 ARCHITECTURE := _x64
@@ -741,10 +746,6 @@ ifdef USE_QTDEBUG
 PARAMS += --USE_QTDEBUG='$(USE_QTDEBUG)'
 endif
 
-ifdef MODERN_WIN_API
-PARAMS += --MODERN_WIN_API='$(MODERN_WIN_API)'
-endif
-
 ifdef USE_SDL
 PARAMS += --USE_SDL='$(USE_SDL)'
 endif
@@ -1134,11 +1135,22 @@ ifdef MSBUILD
 	$(SILENT) msbuild.exe $(PROJECTDIR_WIN)/vs2022-clang/$(PROJECT_NAME).sln $(MSBUILD_PARAMS)
 endif
 
-.PHONY: vs2022_intel
-vs2022_intel: generate
-	$(SILENT) $(GENIE) $(PARAMS) $(TARGET_PARAMS) --vs=intel-15 vs2022
+#-------------------------------------------------
+# Visual Studio 2026
+#-------------------------------------------------
+
+.PHONY: vs2026
+vs2026: generate
+	$(SILENT) $(GENIE) $(PARAMS) $(TARGET_PARAMS) vs2026
 ifdef MSBUILD
-	$(SILENT) msbuild.exe $(PROJECTDIR_WIN)/vs2022-intel/$(PROJECT_NAME).sln $(MSBUILD_PARAMS)
+	$(SILENT) msbuild.exe $(PROJECTDIR_WIN)/vs2026/$(PROJECT_NAME).sln $(MSBUILD_PARAMS)
+endif
+
+.PHONY: vs2026_clang
+vs2026_clang: generate
+	$(SILENT) $(GENIE) $(PARAMS) $(TARGET_PARAMS) --vs=clangcl vs2026
+ifdef MSBUILD
+	$(SILENT) msbuild.exe $(PROJECTDIR_WIN)/vs2026-clang/$(PROJECT_NAME).sln $(MSBUILD_PARAMS)
 endif
 
 #-------------------------------------------------
