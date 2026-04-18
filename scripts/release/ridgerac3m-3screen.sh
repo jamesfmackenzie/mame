@@ -2,42 +2,36 @@
 # ridgerac3m-3screen.sh
 #
 # Launch three ridgerac3m instances for 3-screen play.
-#
-# Ridge Racer (Three Monitor Version, RRC) — requires C139 link-up across 3 PCBs.
-# PCB role is selected via DIP switches SW2:1 and SW2:2 (not CONF settings).
+# Instances start left→center→right; each waits for its TCP listener
+# to be ready before the next launches, ensuring reliable connection.
 #
 # Ring topology:
+#   Left (slave)         Center (master)      Right (forwarder)
+#   localport  15111     localport  15112     localport  15113
+#   remoteport 15112 <── remoteport 15113 ──► remoteport 15111
 #
-#   Center (master)      Right (forwarder)    Left (slave)
-#   localport  15112     localport  15113     localport  15111
-#   remoteport 15113 --> remoteport 15111 --> remoteport 15112
-#
-# DIP switch settings (SW2:1, SW2:2):
-#   Center/Main (PCB 2):  SW2:1=OFF, SW2:2=ON
-#   Left        (PCB 1):  SW2:1=ON,  SW2:2=OFF
-#   Right       (PCB 3):  SW2:1=OFF, SW2:2=OFF
+# DIP switch setup (Tab → DIP Switches):
+#   left window   → SW2:1=ON,  SW2:2=OFF  (Left, PCB 1)
+#   center window → SW2:1=OFF, SW2:2=ON   (Center/Main, PCB 2)
+#   right window  → SW2:1=OFF, SW2:2=OFF  (Right, PCB 3)
+#   Settings persist in multiplay/ after first run.
 #
 # Usage:
-#   ./ridgerac3m-3screen.sh            normal run (all 3 instances)
-#   ./ridgerac3m-3screen.sh setup      first-run: opens one window at a time so
-#                                      you can set the DIP switches in each before
-#                                      the next opens
-#   ./ridgerac3m-3screen.sh verbose    all instances get -verbose (network output in logs)
+#   ./ridgerac3m-3screen.sh          normal run
+#   ./ridgerac3m-3screen.sh debug    right screen gets -debug
 
 set -euo pipefail
 
-# Detect binary name (macOS and Linux both produce 'namcos22')
 BINARY=./mamenamcos22
-
 GAME=ridgerac3m
 LOG_DIR=multiplay/logs
-MODE="${1:-run}"
+WAIT_TIMEOUT=30
 
-# ---- sanity checks --------------------------------------------------------
+MODE="${1:-run}"
 
 if [[ ! -x "$BINARY" ]]; then
     echo "error: $BINARY not found." >&2
-    echo "       This script must be run from the same directory as the namcos22 binary." >&2
+    echo "       This script must be run from the same directory as mamenamcos22." >&2
     exit 1
 fi
 
@@ -49,18 +43,11 @@ fi
 
 mkdir -p multiplay/center multiplay/right multiplay/left "$LOG_DIR"
 
-# ---- port assignments -----------------------------------------------------
-
 CENTER_LOCAL=15112;  CENTER_REMOTE=15113
 RIGHT_LOCAL=15113;   RIGHT_REMOTE=15111
 LEFT_LOCAL=15111;    LEFT_REMOTE=15112
 
-# ---- window size ----------------------------------------------------------
-
 WINDOW_OPTS=(-window -resolution 640x480)
-
-# ---- cleanup on exit ------------------------------------------------------
-
 PIDS=()
 
 cleanup() {
@@ -79,15 +66,25 @@ cleanup() {
 
 trap cleanup INT TERM EXIT
 
-# ---- launch helper --------------------------------------------------------
+wait_for_listener() {
+    local logfile="$1" label="$2" waited=0
+    while (( waited < WAIT_TIMEOUT )); do
+        grep -Fq "C139: RX listening on" "$logfile" 2>/dev/null && { echo "  $label ready"; return 0; }
+        sleep 1
+        (( waited++ ))
+    done
+    echo "  timed out waiting for $label" >&2
+    return 1
+}
 
 launch() {
-    local role="$1"; local lport="$2"; local rport="$3"
+    local role="$1" lport="$2" rport="$3"
     shift 3
     "$BINARY" "$GAME" \
         "${WINDOW_OPTS[@]}" \
-        -rompath roms \
-        -cfg_directory  "multiplay/${role}" \
+        -verbose \
+        -rompath         roms \
+        -cfg_directory   "multiplay/${role}" \
         -nvram_directory "multiplay/${role}" \
         -comm_localhost  127.0.0.1 \
         -comm_localport  "${lport}" \
@@ -97,59 +94,11 @@ launch() {
         > "$LOG_DIR/${role}.log" 2>&1 &
     local pid=$!
     PIDS+=("$pid")
-    echo "  ${role} (pid ${pid})  localport=${lport}  -->  remoteport=${rport}  log: $LOG_DIR/${role}.log"
+    echo "  ${role} (pid ${pid})  localport=${lport} → remoteport=${rport}  log: $LOG_DIR/${role}.log"
 }
 
-# ==========================================================================
-# SETUP MODE
-# ==========================================================================
-
-if [[ "$MODE" == "setup" ]]; then
-    cat <<'MSG'
-FIRST-RUN SETUP
----------------
-Each window will open one at a time. In each one:
-  1. Press Tab to open the MAME menu
-  2. Go to DIP Switches
-  3. Set SW2:1 and SW2:2 to the values shown below
-  4. Close the window to continue to the next
-
-MSG
-
-    echo "--- Opening CENTER window ---"
-    echo "    Set SW2:1=OFF, SW2:2=ON   ->  Center/Main (PCB 2)"
-    launch center "$CENTER_LOCAL" "$CENTER_REMOTE"
-    wait "${PIDS[${#PIDS[@]}-1]}"
-    echo "Center config saved."
-    echo ""
-
-    echo "--- Opening RIGHT SCREEN window ---"
-    echo "    Set SW2:1=OFF, SW2:2=OFF  ->  Right (PCB 3)"
-    launch right "$RIGHT_LOCAL" "$RIGHT_REMOTE"
-    wait "${PIDS[${#PIDS[@]}-1]}"
-    echo "Right screen config saved."
-    echo ""
-
-    echo "--- Opening LEFT SCREEN window ---"
-    echo "    Set SW2:1=ON,  SW2:2=OFF  ->  Left (PCB 1)"
-    launch left "$LEFT_LOCAL" "$LEFT_REMOTE"
-    wait "${PIDS[${#PIDS[@]}-1]}"
-    echo "Left screen config saved."
-    echo ""
-    echo "Setup complete. Run ./ridgerac3m-3screen.sh to start all three."
-    exit 0
-fi
-
-# ==========================================================================
-# NORMAL / VERBOSE RUN
-# ==========================================================================
-
-EXTRA_ALL=()
-if [[ "$MODE" == "verbose" ]]; then
-    EXTRA_ALL=(-verbose)
-    echo "Verbose mode: network output in $LOG_DIR/*.log"
-    echo ""
-fi
+EXTRA_RIGHT=()
+[[ "$MODE" == "debug" ]] && EXTRA_RIGHT=(-debug)
 
 rm -f "$LOG_DIR"/*.log
 
@@ -157,16 +106,29 @@ cat <<MSG
 Starting ridgerac3m 3-screen (Ridge Racer Three Monitor Version)
   Physical layout:  [ LEFT ] [ CENTER ] [ RIGHT ]
 
+DIP switch reminder (Tab → DIP Switches):
+  left window   → SW2:1=ON,  SW2:2=OFF  (Left, PCB 1)
+  center window → SW2:1=OFF, SW2:2=ON   (Center/Main, PCB 2)
+  right window  → SW2:1=OFF, SW2:2=OFF  (Right, PCB 3)
+  (Settings persist in multiplay/ — only needed on first run.)
+
 MSG
 
-launch center "$CENTER_LOCAL" "$CENTER_REMOTE" ${EXTRA_ALL[@]+"${EXTRA_ALL[@]}"}
-sleep 0.5
-launch right  "$RIGHT_LOCAL"  "$RIGHT_REMOTE"  ${EXTRA_ALL[@]+"${EXTRA_ALL[@]}"}
-sleep 0.5
-launch left   "$LEFT_LOCAL"   "$LEFT_REMOTE"   ${EXTRA_ALL[@]+"${EXTRA_ALL[@]}"}
+echo "Launching LEFT (slave, port ${LEFT_LOCAL})..."
+launch left "$LEFT_LOCAL" "$LEFT_REMOTE"
+wait_for_listener "$LOG_DIR/left.log" "left"
+
+echo "Launching CENTER (master, port ${CENTER_LOCAL})..."
+launch center "$CENTER_LOCAL" "$CENTER_REMOTE"
+wait_for_listener "$LOG_DIR/center.log" "center"
+
+echo "Launching RIGHT (forwarder, port ${RIGHT_LOCAL})..."
+launch right "$RIGHT_LOCAL" "$RIGHT_REMOTE" ${EXTRA_RIGHT[@]+"${EXTRA_RIGHT[@]}"}
+wait_for_listener "$LOG_DIR/right.log" "right"
 
 echo ""
 echo "All instances running. Ctrl+C to stop all."
+echo "Logs: tail -f $LOG_DIR/left.log  (or center.log / right.log)"
 echo ""
 
 wait "${PIDS[@]}" 2>/dev/null || true

@@ -28,39 +28,34 @@ REQUIREMENTS
 RIDGE RACER FULL SCALE (ridgeracf)
 ===========================================================================
 
-FIRST-RUN SETUP (required once per screen)
--------------------------------------------
-Each MAME instance needs to know which screen it represents.
-Run the setup script to configure them one at a time:
+FIRST-RUN DIP SWITCH SETUP (required once per screen)
+------------------------------------------------------
+Each MAME instance needs to know which screen it represents via its
+"PCB Role (3-Screen)" DIP switch setting.  The launcher opens windows
+left→center→right and prints a reminder, but you must set the DIP once:
 
-  Linux / macOS:
-    chmod +x ridgeracf-3screen.sh     (first time only)
-    ./ridgeracf-3screen.sh setup
+  In each window, in the order they open:
+    1. Press Tab to open the MAME menu
+    2. Go to DIP Switches
+    3. Set "PCB Role (3-Screen)":
+         left window   → Left Screen (slave — receive only)
+         center window → Center (master — generates and TX scene data)
+         right window  → Right Screen (forwarder — relays to left)
 
-  Windows:
-    ridgeracf-3screen.bat setup
-
-A window will open for each screen in turn. In each window:
-  1. Press Tab to open the MAME menu
-  2. Go to DIP Switches
-  3. Set "PCB Role (3-Screen)" to the value shown in the terminal:
-       - First window:   Center (master)
-       - Second window:  Right Screen (forwarder -- relays to left)
-       - Third window:   Left Screen (slave -- receive only)
-  4. Close the window — the next one will open automatically
-
-Setup only needs to be done once. Settings are saved in multiplay/.
+Settings are saved in multiplay/ and persist across runs.
 
 
 RUNNING
 -------
   Linux / macOS:
+    chmod +x ridgeracf-3screen.sh     (first time only)
     ./ridgeracf-3screen.sh
 
   Windows:
     ridgeracf-3screen.bat
 
-Three windows will open in order: center, right, left.
+Three windows open in order: left, center, right.
+Each waits for the previous to be ready before starting.
 Physical screen layout:  [ LEFT ] [ CENTER ] [ RIGHT ]
 
 Press Ctrl+C (Linux/macOS) or close all windows (Windows) to stop.
@@ -70,39 +65,28 @@ NETWORK TOPOLOGY
 ----------------
 The three instances communicate over TCP on localhost:
 
-  Center (master)       Right (forwarder)     Left (slave)
-  port 15112            port 15113            port 15111
-       |                     |                     |
-       +-------------------->+-------------------->+
-                                                   |
-       <-------------------------------------------+
-
-Ports 15111-15113 must be free on localhost.
+  Left (slave)         Center (master)      Right (forwarder)
+  port 15111           port 15112           port 15113
+       |                    |                    |
+       <────────────────────+────────────────────+
 
 
 ===========================================================================
 RIDGE RACER THREE MONITOR VERSION (ridgerac3m)
 ===========================================================================
 
-FIRST-RUN SETUP (required once per screen)
--------------------------------------------
+FIRST-RUN DIP SWITCH SETUP (required once per screen)
+------------------------------------------------------
 ridgerac3m uses physical DIP switches (SW2:1 and SW2:2) to identify each
-PCB, rather than a Machine Configuration setting.
+PCB.  The launcher opens windows left→center→right and prints a reminder:
 
-Run the setup script to configure them one at a time:
-
-  Linux / macOS:
-    chmod +x ridgerac3m-3screen.sh    (first time only)
-    ./ridgerac3m-3screen.sh setup
-
-A window will open for each screen in turn. In each window:
-  1. Press Tab to open the MAME menu
-  2. Go to DIP Switches
-  3. Set SW2:1 and SW2:2 to the values shown in the terminal:
-       - First window  (center): SW2:1=OFF, SW2:2=ON
-       - Second window (right):  SW2:1=OFF, SW2:2=OFF
-       - Third window  (left):   SW2:1=ON,  SW2:2=OFF
-  4. Close the window — the next one will open automatically
+  In each window, in the order they open:
+    1. Press Tab to open the MAME menu
+    2. Go to DIP Switches
+    3. Set SW2:1 and SW2:2:
+         left window   → SW2:1=ON,  SW2:2=OFF  (Left, PCB 1)
+         center window → SW2:1=OFF, SW2:2=ON   (Center/Main, PCB 2)
+         right window  → SW2:1=OFF, SW2:2=OFF  (Right, PCB 3)
 
 DIP switch to role mapping (active-low: bit=1 means switch OFF):
 
@@ -112,15 +96,17 @@ DIP switch to role mapping (active-low: bit=1 means switch OFF):
   ON     OFF    Left        (PCB 1)
   OFF    OFF    Right       (PCB 3)
 
-Setup only needs to be done once. Settings are saved in multiplay/.
+Settings are saved in multiplay/ and persist across runs.
 
 
 RUNNING
 -------
   Linux / macOS:
+    chmod +x ridgerac3m-3screen.sh    (first time only)
     ./ridgerac3m-3screen.sh
 
-Three windows will open in order: center, right, left.
+Three windows open in order: left, center, right.
+Each waits for the previous to be ready before starting.
 Physical screen layout:  [ LEFT ] [ CENTER ] [ RIGHT ]
 
 Press Ctrl+C to stop all instances.
@@ -128,12 +114,10 @@ Press Ctrl+C to stop all instances.
 
 NETWORK TOPOLOGY
 ----------------
-  Center (master)       Right (forwarder)     Left (slave)
-  port 15112            port 15113            port 15111
-       |                     |                     |
-       +-------------------->+-------------------->+
-                                                   |
-       <-------------------------------------------+
+  Left (slave)         Center (master)      Right (forwarder)
+  port 15111           port 15112           port 15113
+       |                    |                    |
+       <────────────────────+────────────────────+
 
 Ports 15111-15113 must be free on localhost.
 
@@ -149,15 +133,18 @@ TROUBLESHOOTING (both games)
     Ensure the ROM files are in the correct roms/ subdirectory.
 
   Windows: black screen or immediate exit (ridgeracf)
-    Run setup mode first to configure PCB Role for each screen.
+    Set the PCB Role DIP switch for each screen (see First-Run Setup above).
 
   ridgerac3m side screens show black
     C139 linking must be active. Verify DIP switch settings and that
-    all three instances are running and connected on ports 15121-15123.
+    all three instances are running and connected on ports 15111-15113.
 
   Screens do not sync / game freezes on attract
     Check PCB role / DIP switch settings — each screen must be unique.
-    Re-run setup mode if needed.
+
+  Launcher times out waiting for a screen to be ready
+    Check multiplay/logs/<role>.log for errors.
+    Ensure ports 15111-15113 are not in use by another process.
 
   macOS: "mamenamcos22 cannot be opened because it is from an unidentified developer"
     Right-click mamenamcos22 -> Open -> Open (first time only).
