@@ -62,14 +62,14 @@ if /i "%MODE%"=="setup" (
     echo.
 
     echo --- Opening RIGHT SCREEN window ---
-    echo     Set PCB Role -^> 'Right Screen ^(forwarder^)'
+    echo     Set PCB Role -^> 'Right Screen ^(forwarder -- relays to left^)'
     echo.
     %BINARY% %GAME% -window -resolution 640x480 -rompath roms -cfg_directory multiplay\right -nvram_directory multiplay\right -comm_localhost 127.0.0.1 -comm_localport 15113 -comm_remotehost 127.0.0.1 -comm_remoteport 15111
     echo Right screen config saved.
     echo.
 
     echo --- Opening LEFT SCREEN window ---
-    echo     Set PCB Role -^> 'Left Screen ^(slave^)'
+    echo     Set PCB Role -^> 'Left Screen ^(slave -- receive only^)'
     echo.
     %BINARY% %GAME% -window -resolution 640x480 -rompath roms -cfg_directory multiplay\left -nvram_directory multiplay\left -comm_localhost 127.0.0.1 -comm_localport 15111 -comm_remotehost 127.0.0.1 -comm_remoteport 15112
     echo Left screen config saved.

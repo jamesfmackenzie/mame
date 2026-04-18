@@ -116,14 +116,14 @@ MSG
     echo ""
 
     echo "--- Opening RIGHT SCREEN window ---"
-    echo "    Set PCB Role -> 'Right Screen (forwarder)'"
+    echo "    Set PCB Role -> 'Right Screen (forwarder -- relays to left)'"
     launch right "$RIGHT_LOCAL" "$RIGHT_REMOTE"
     wait "${PIDS[${#PIDS[@]}-1]}"
     echo "Right screen config saved."
     echo ""
 
     echo "--- Opening LEFT SCREEN window ---"
-    echo "    Set PCB Role -> 'Left Screen (slave)'"
+    echo "    Set PCB Role -> 'Left Screen (slave -- receive only)'"
     launch left "$LEFT_LOCAL" "$LEFT_REMOTE"
     wait "${PIDS[${#PIDS[@]}-1]}"
     echo "Left screen config saved."

@@ -71,6 +71,7 @@ The C139 appears across three Namco hardware platforms:
 |------|------|----------|
 | Ridge Racer (all variants) | 1993 | Standard 2-cab link |
 | **Ridge Racer Full Scale** | 1993 | **3-screen, unique topology** |
+| **Ridge Racer Three Monitor Version** | 1994 | **3-screen, DIP-configured roles** |
 | Ridge Racer 2 | 1994 | Linked |
 | Rave Racer | 1995 | Linked |
 | Cyber Commando | 1994 | Present |
@@ -225,9 +226,9 @@ Mode  Binary  Int Type   Timing    Condition
 0xF   1111    No int     —         —  ← reset/config state
 ```
 
-#### Mode 0x0C in Detail (ridgeracf)
+#### Mode 0x0C in Detail (ridgeracf, ridgerac3m)
 
-Mode 0x0C is used **exclusively by ridgeracf** among all known Namco titles.
+Mode 0x0C is used by **ridgeracf** and **ridgerac3m** — both 3-screen Ridge Racer installations. No other known Namco title uses it.
 
 - **Interrupt fires when**: A received 9-bit word has bit-8 (the sync bit) set → REG_0 bit-1 (SYNC) becomes set
 - **TX control sequence** observed from ROM watchpoints on the center machine:
@@ -442,7 +443,22 @@ SailorSat's is the more mature implementation by a significant margin. It has a 
 
 ## How the C139 Is Used
 
-Ridge Racer Full Scale (`ridgeracf`) is a 3-screen linked arcade installation. Three **identical PCBs** run the same ROM — the only difference is a DIP switch setting identifying each PCB as center, left, or right. The PCBs communicate using the C139 in mode 0x0C, a mode used by no other known Namco title.
+Ridge Racer Full Scale (`ridgeracf`) is a 3-screen linked arcade installation. Three **identical PCBs** run the same ROM — the only difference is a configuration setting identifying each PCB as center, left, or right. The PCBs communicate using the C139 in mode 0x0C.
+
+Ridge Racer Three Monitor Version (`ridgerac3m`, RRC) uses the same 3-screen mode 0x0C topology. The structural difference between the two is how PCB identity is configured:
+
+| Game | ROM set | PCB role selection | Ports (emulated) |
+|------|---------|--------------------|------------------|
+| Ridge Racer Full Scale | ridgeracf (RRF2) | `PORT_CONFNAME` — Machine Configuration menu | 15111–15113 |
+| Ridge Racer Three Monitor Version | ridgerac3m (RRC) | `PORT_DIPNAME` — physical DIP switches SW2:1/SW2:2 | 15111–15113 |
+
+### ridgerac3m DIP Switch Encoding (SW2:1, SW2:2 — active-low)
+
+| SW2:1 | SW2:2 | Raw value | Role |
+|-------|-------|-----------|------|
+| OFF (1) | ON  (0) | 0x00010000 | Center/Main (PCB 2) — default |
+| ON  (0) | OFF (1) | 0x00020000 | Left (PCB 1) |
+| OFF (1) | OFF (1) | 0x00030000 | Right (PCB 3) |
 
 The **center PCB** generates the complete game scene and transmits 242 words of scene state to the two side PCBs every frame. The side PCBs receive this data, use it to render their own perspective of the same scene, and do not transmit anything back.
 
@@ -859,7 +875,7 @@ Add ASIO TCP transport (modelled on SS, built fresh against master's ASIO API).
 - [ ] Add `comm_tick()` timer at 12MHz: evaluate mode register, fire IRQ callback when condition met
 - [ ] Implement mode 0x0F (no interrupt / config state) and mode 0x0C (IRQ on sync bit received) first — these cover ridgeracf
 
-### Phase 3 — ridgeracf Support (Mode 0x0C, 3-Screen Topology) ✅ COMPLETE (2026-04-12)
+### Phase 3 — ridgeracf / ridgerac3m Support (Mode 0x0C, 3-Screen Topology) ✅ COMPLETE (2026-04-12)
 
 - [x] Add topology role enum: `role_t::CENTER`, `role_t::FORWARDER`, `role_t::SLAVE`
 - [x] Add `set_role(role_t)` configuration method; called from `namcos22_state::machine_reset()`
@@ -869,6 +885,7 @@ Add ASIO TCP transport (modelled on SS, built fresh against master's ASIO API).
 - [x] Slave role (left screen): receive only; no relay, no transmit
 - [x] ridgeracf `PORT_MODIFY("DSW")` SW2:1/SW2:2 replaced with `PORT_CONFNAME` for PCB role
 - [ ] Verify ridgeracf boots and center screen renders correctly with 3 MAME instances
+- [ ] Verify ridgerac3m with DIP-switch role selection (SW2:1/SW2:2, `PORT_DIPNAME`, ports 15121–15123)
 
 ### Phase 4 — Side-Screen Rendering Fix ✅ RESOLVED BY TRACE (2026-04-12)
 

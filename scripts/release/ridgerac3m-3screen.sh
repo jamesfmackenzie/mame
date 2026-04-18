@@ -9,13 +9,13 @@
 # Ring topology:
 #
 #   Center (master)      Right (forwarder)    Left (slave)
-#   localport  15122     localport  15123     localport  15121
-#   remoteport 15123 --> remoteport 15121 --> remoteport 15122
+#   localport  15112     localport  15113     localport  15111
+#   remoteport 15113 --> remoteport 15111 --> remoteport 15112
 #
 # DIP switch settings (SW2:1, SW2:2):
-#   Center/Main (PCB 2):  SW2:1=OFF, SW2:2=OFF
-#   Left        (PCB 1):  SW2:1=OFF, SW2:2=ON
-#   Right       (PCB 3):  SW2:1=ON,  SW2:2=ON
+#   Center/Main (PCB 2):  SW2:1=OFF, SW2:2=ON
+#   Left        (PCB 1):  SW2:1=ON,  SW2:2=OFF
+#   Right       (PCB 3):  SW2:1=OFF, SW2:2=OFF
 #
 # Usage:
 #   ./ridgerac3m-3screen.sh            normal run (all 3 instances)
@@ -51,9 +51,9 @@ mkdir -p multiplay/center multiplay/right multiplay/left "$LOG_DIR"
 
 # ---- port assignments -----------------------------------------------------
 
-CENTER_LOCAL=15122;  CENTER_REMOTE=15123
-RIGHT_LOCAL=15123;   RIGHT_REMOTE=15121
-LEFT_LOCAL=15121;    LEFT_REMOTE=15122
+CENTER_LOCAL=15112;  CENTER_REMOTE=15113
+RIGHT_LOCAL=15113;   RIGHT_REMOTE=15111
+LEFT_LOCAL=15111;    LEFT_REMOTE=15112
 
 # ---- window size ----------------------------------------------------------
 
@@ -117,21 +117,21 @@ Each window will open one at a time. In each one:
 MSG
 
     echo "--- Opening CENTER window ---"
-    echo "    Set SW2:1=OFF, SW2:2=OFF  ->  Center/Main (PCB 2)"
+    echo "    Set SW2:1=OFF, SW2:2=ON   ->  Center/Main (PCB 2)"
     launch center "$CENTER_LOCAL" "$CENTER_REMOTE"
     wait "${PIDS[${#PIDS[@]}-1]}"
     echo "Center config saved."
     echo ""
 
     echo "--- Opening RIGHT SCREEN window ---"
-    echo "    Set SW2:1=ON,  SW2:2=ON   ->  Right (PCB 3)"
+    echo "    Set SW2:1=OFF, SW2:2=OFF  ->  Right (PCB 3)"
     launch right "$RIGHT_LOCAL" "$RIGHT_REMOTE"
     wait "${PIDS[${#PIDS[@]}-1]}"
     echo "Right screen config saved."
     echo ""
 
     echo "--- Opening LEFT SCREEN window ---"
-    echo "    Set SW2:1=OFF, SW2:2=ON   ->  Left (PCB 1)"
+    echo "    Set SW2:1=ON,  SW2:2=OFF  ->  Left (PCB 1)"
     launch left "$LEFT_LOCAL" "$LEFT_REMOTE"
     wait "${PIDS[${#PIDS[@]}-1]}"
     echo "Left screen config saved."
