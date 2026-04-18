@@ -31,7 +31,7 @@
         Last byte |=  0x01 to set sync bit on final word
         Byte  0x1FF:  0x01 (frame sentinel)
 
-    TODO (Phase 3): ridgeracf 3-screen topology role configuration
+    DONE (Phase 3): ridgeracf/ridgerac3m 3-screen topology role configuration (namcos22.cpp machine_reset)
     TODO (Phase 5): modes 0x09, 0x08, 0x0D
     TODO: C422 (System 23 pin-compatible upgrade)
 
@@ -788,17 +788,22 @@ void namco_c139_device::recv_data()
 	if (recv_frame() == 0)
 		return;  // no complete frame yet
 
-	const unsigned rx_size   = uint16_t(m_buffer[2]) << 8 | m_buffer[1];
-	const unsigned rx_offset = m_reg[REG_6_RXOFFSET];
+	const unsigned rx_size = uint16_t(m_buffer[2]) << 8 | m_buffer[1];
+
+	// When advancing REG_6 by rx_size would overflow the 13-bit RAM space, reset the
+	// write pointer to the start of the RX area (0x1000) so the frame is written there
+	// and REG_6 = 0x1000 + rx_size.  This prevents the floor-induced discontinuity where
+	// the game computes start = (floor(overflow) - rx_size) and lands in the TX area.
+	const unsigned rx_offset = (m_reg[REG_6_RXOFFSET] + rx_size > 0x1fffu)
+		? 0x1000u : unsigned(m_reg[REG_6_RXOFFSET]);
 
 	LOG("C139: recv rx_size=%02x rx_offset=%04x\n", rx_size, rx_offset);
 
-	// write received words into the RX area of RAM
+	// write received words into the RX area of RAM (no wrapping needed: overflow reset above)
 	for (unsigned j = 0; j < rx_size; j++)
 	{
 		const unsigned buf = 3 + j * 2;
-		const unsigned ram = 0x1000 + ((rx_offset + j) & 0x0fff);
-		m_ram[ram] = uint16_t(m_buffer[buf + 1]) << 8 | m_buffer[buf];
+		m_ram[rx_offset + j] = uint16_t(m_buffer[buf + 1]) << 8 | m_buffer[buf];
 	}
 
 	// sync bit is signalled by bit-0 of the second byte of the last payload word
@@ -807,18 +812,16 @@ void namco_c139_device::recv_data()
 		(rx_size > 0 && (m_buffer[3 + (rx_size - 1) * 2 + 1] & 0x01)) ||
 		(m_buffer[FRAME_SIZE - 1] & 0x01);
 
-	// update size and offset accumulators (masked to hardware width)
-	m_reg[REG_4_RXSIZE]   = (m_reg[REG_4_RXSIZE]   + rx_size) & REG_MASKS[REG_4_RXSIZE];
-	m_reg[REG_6_RXOFFSET] = std::max(
-		uint16_t((m_reg[REG_6_RXOFFSET] + rx_size) & REG_MASKS[REG_6_RXOFFSET]),
-		uint16_t(0x1000));
+	// REG_4: size of the most-recently received frame.
+	// REG_6: advanced to end of written region; game computes start = REG_6 - REG_4.
+	m_reg[REG_4_RXSIZE]   = rx_size & REG_MASKS[REG_4_RXSIZE];
+	m_reg[REG_6_RXOFFSET] = uint16_t(rx_offset + rx_size) & REG_MASKS[REG_6_RXOFFSET];
 
 	// RXREADY clears while there is data to consume (RXSIZE > 0)
 	if (m_reg[REG_4_RXSIZE] > 0)
 		m_reg[REG_0_STATUS] &= ~STATUS_RXREADY;
 
-	// relay: if this frame was not sent by this instance, forward it to the next node
-	// (Phase 3 will replace this with explicit role-based topology)
+	// relay: forward frames that did not originate from this instance
 	if (m_buffer[0] != m_linkid)
 		send_frame();
 
