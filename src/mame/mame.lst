@@ -17849,6 +17849,7 @@ ultrchmph
 
 @source:dynax/dynax.cpp
 7jigen
+baoqingt
 blktouch
 cdracula
 drgpunch
@@ -34854,7 +34855,9 @@ tactcian2
 rbowlorama
 
 @source:namco/sg_vga.cpp
+galfever
 hplanet
+shootpar
 
 @source:namco/shootaway2.cpp
 shootaw2
@@ -44624,9 +44627,6 @@ a1010
 
 @source:skeleton/ti630.cpp
 ti630
-
-@source:skeleton/ticz80.cpp
-baoqingt
 
 @source:skeleton/tk635.cpp
 tk635
