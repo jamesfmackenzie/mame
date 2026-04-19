@@ -816,8 +816,11 @@ void namco_c139_device::recv_data()
 	if (m_reg[REG_4_RXSIZE] > 0)
 		m_reg[REG_0_STATUS] &= ~STATUS_RXREADY;
 
-	// relay: forward frames that did not originate from this instance
-	if (m_buffer[0] != m_linkid)
+	// relay: forward frames that did not originate from this instance.
+	// FORWARDER skips here — the ASIO thread (start_receive_rx) already relayed
+	// the raw bytes to m_fifo_tx; doing it again here would send every frame twice,
+	// filling the SLAVE's RX FIFO until overflow and periodic disconnect/lag.
+	if (m_buffer[0] != m_linkid && m_role != role_t::FORWARDER)
 		send_frame();
 
 	// mode 0x0C: IRQ fires when the sync bit is received
