@@ -32,6 +32,8 @@
         Byte  0x1FF:  0x01 (frame sentinel)
 
     DONE (Phase 3): ridgeracf/ridgerac3m 3-screen topology role configuration (namcos22.cpp machine_reset)
+    DONE: ridgerac3m verified live (2026-08-14) — boots, links, and renders correctly
+          in attract mode via ridgerac3m-3screen.sh; sustained in-game sync not yet tested
     TODO (Phase 5): modes 0x09, 0x08, 0x0D
     TODO: C422 (System 23 pin-compatible upgrade)
 

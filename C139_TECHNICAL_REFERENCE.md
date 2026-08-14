@@ -884,8 +884,36 @@ Add ASIO TCP transport (modelled on SS, built fresh against master's ASIO API).
 - [x] Forwarder role (right screen): relay received bytes immediately in ASIO callback without CPU
 - [x] Slave role (left screen): receive only; no relay, no transmit
 - [x] ridgeracf `PORT_MODIFY("DSW")` SW2:1/SW2:2 replaced with `PORT_CONFNAME` for PCB role
-- [ ] Verify ridgeracf boots and center screen renders correctly with 3 MAME instances
-- [ ] Verify ridgerac3m with DIP-switch role selection (SW2:1/SW2:2, `PORT_DIPNAME`, ports 15121–15123)
+- [x] Verify ridgeracf boots and center screen renders correctly with 3 MAME instances
+- [x] Verify ridgerac3m with DIP-switch role selection (SW2:1/SW2:2) ✅ CONFIRMED (2026-08-14)
+
+### ridgerac3m Verification Result — CONFIRMED (2026-08-14)
+
+A complete `ridgerac3m` ROM dump (4 program ROMs: `rrc_prgll.4d`, `rrc_prglm.2d`,
+`rrc_prgum.8d`, `rrc_prguu.6d`) was sourced and checksum-verified byte-for-byte
+against the driver's `ROM_START( ridgerac3m )` CRC32/SHA1 values — exact match.
+Unlike `ridgeracf`, `ridgerac3m` is declared as a **clone of `ridgerac`**
+(`GAME( 1994, ridgerac3m, ridgerac, ... )`), so it uses the standard, fully-dumped
+Ridge Racer graphics/sound/point ROM set (`rr1cg*`, `rr1ccr*`, `rr1pot*`, `rr1wav*`)
+via MAME's parent-set resolution — **no graphics corruption issue** like the
+Full Scale program/graphics ROM mismatch.
+
+Ran via `./ridgerac3m-3screen.sh`: all three instances (left/slave, center/master,
+right/forwarder) connected over TCP cleanly, DIP-switch role selection (SW2:1/SW2:2)
+took effect correctly, and the forwarder relayed 2,806 frames over a ~19s run with
+**zero errors, overflows, or disconnects**.
+
+Visual confirmation: center/right screens rendered a correct, uncorrupted attract-mode
+scene (HUD, road, scenery). Left and center side monitors showed tight canyon-wall
+close-ups consistent with a **wraparound side-camera perspective** during a corner —
+i.e. each PCB is rendering its own distinct viewport from the broadcast scene state,
+not just replaying the center's frame. This is the strongest evidence yet that the
+canonical C139 register model + role-based relay is delivering hardware-correct
+per-screen camera data.
+
+**Not yet verified**: sustained sync through actual gameplay (credits inserted, race
+started) rather than attract-mode demo — attract mode does not exercise player input
+or prolonged runtime, so frame-perfect long-run sync is still an open question.
 
 ### Phase 4 — Side-Screen Rendering Fix ✅ RESOLVED BY TRACE (2026-04-12)
 
@@ -938,3 +966,5 @@ Once ridgeracf is solid, extend to the other mode groups:
 | Side screen SCI ISR triggers pdp_begin_r() indirectly | ✓ (ROM trace 2026-04-12) | |
 | ISR trigger mechanism: write #$1 to polygon RAM[0] (0x70000000) | ✓ (ROM trace 0x9F7C) | |
 | ISR entry address (ridgeracf RRF2): 0x15432 | ✓ (ROM trace 2026-04-12) | |
+| ridgerac3m 3-screen boot/link/render (attract mode) | ✓ (live test 2026-08-14) | |
+| ridgerac3m sustained sync through actual gameplay | | Not yet tested |
